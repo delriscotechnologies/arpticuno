@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arpticuno"
+version = "0.1.0"
+description = "Basic IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Cristian Del Risco" }
+]
+dependencies = [
+  "scapy>=2.5.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0"
+]
+
+[project.scripts]
+arpticuno = "arpticuno.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
