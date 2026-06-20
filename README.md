@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/delriscotechnologies/arpticuno/main/assets/arpticuno-logo.png" alt="Arpticuno logo" width="420">
 </p>
 
-<h1 align="center">Arpticuno</h1>
+<h1 align="center"></h1>
 
 Arpticuno is a small IPv4 LAN scanner built to be easy to understand, easy to run, and hard to misuse by accident.
 
