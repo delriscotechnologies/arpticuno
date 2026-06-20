@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/arpticuno-logo.png" alt="Arpticuno logo" width="420">
+  <img src="<img src="https://raw.githubusercontent.com/delriscotechnologies/arpticuno/main/assets/arpticuno-logo.png" alt="Arpticuno logo" width="420">" alt="Arpticuno logo" width="420">
 </p>
 
 <h1 align="center">Arpticuno</h1>
