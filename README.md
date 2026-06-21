@@ -3,7 +3,7 @@
 </p>
 
 
-Arpticuno is a small IPv4 LAN scanner built to be easy to understand, easy to run, and hard to misuse by accident.
+Arpticuno is a small open-source IPv4 LAN scanner built to be easy to understand, easy to run, and hard to misuse by accident.
 
 You give it a target. It finds live hosts on your local network with ARP. Then it checks the **first 7000 TCP ports** on each live host with normal Python socket connections.
 
@@ -19,7 +19,7 @@ You need:
 
 - Python 3.10 or newer
 - `pip` and `venv`
-- permission to run ARP discovery with elevated privileges, usually `sudo`
+- permission to run ARP discovery with elevated privileges
 - access to the local LAN interface you want to scan
 - internet access the first time you install dependencies
 
