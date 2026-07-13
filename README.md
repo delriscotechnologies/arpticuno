@@ -157,4 +157,4 @@ sudo env "PATH=$PATH" arpticuno scan 192.168.1.0/24
 Arpticuno is intentionally simple right now.
 The goal is to keep the command surface clean, the behavior understandable, and the output easy to read.
 
-Automated CI runs the tests, linting, type checks, Bandit, and dependency auditing on every push and pull request. Security reports should follow [SECURITY.md](SECURITY.md).
+Testing, linting, type checking, Bandit scanning, and dependency auditing are built into the project and run on every push and pull request. Security reports should follow [SECURITY.md](SECURITY.md).
