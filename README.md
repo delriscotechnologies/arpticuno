@@ -158,4 +158,5 @@ Arpticuno is intentionally simple right now.
 The goal is to keep the command surface clean, the behavior understandable, and the output easy to read.
 
 Testing, linting, type checking, bandit scanning, and dependency auditing are built into the project and run on every push and pull request. 
+
 Security reports should follow [SECURITY.md](SECURITY.md).
