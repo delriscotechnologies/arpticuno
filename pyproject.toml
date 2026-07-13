@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0,<2.0.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -13,12 +13,16 @@ authors = [
   { name = "Cristian Del Risco" }
 ]
 dependencies = [
-  "scapy>=2.5.0"
+  "scapy==2.7.0"
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0.0"
+  "pytest==9.1.1",
+  "ruff==0.15.21",
+  "mypy==2.3.0",
+  "bandit==1.9.4",
+  "pip-audit==2.10.1"
 ]
 
 [project.scripts]

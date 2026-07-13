@@ -11,6 +11,9 @@ from typing import Callable, Sequence
 ALL_TCP_PORTS = tuple(range(1, 65536))
 MAX_WORKERS = 512
 MAX_TIMEOUT_SECONDS = 10.0
+MAX_PORTS_PER_HOST = 65_535
+MAX_HOSTS_PER_SCAN = 256
+MAX_TOTAL_PROBES = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -61,7 +64,9 @@ def _validate_scan_options(ports: Sequence[int], timeout: float, workers: int) -
         raise ValueError(f"TCP connect timeout must be greater than 0 and no more than {MAX_TIMEOUT_SECONDS:g} seconds")
     if workers < 1 or workers > MAX_WORKERS:
         raise ValueError(f"Workers must be between 1 and {MAX_WORKERS}")
-    validated_ports = list(ports)
+    if len(ports) > MAX_PORTS_PER_HOST:
+        raise ValueError(f"A scan cannot contain more than {MAX_PORTS_PER_HOST} TCP ports per host")
+    validated_ports = list(dict.fromkeys(ports))
     for port in validated_ports:
         _validate_port(port)
     return validated_ports
@@ -141,8 +146,15 @@ def scan_ports_threaded(
 ) -> list[PortResult]:
     """Scan multiple hosts by scanning each host with the shared port engine."""
     results: list[PortResult] = []
-    validated_ports = list(ports)
+    if len(hosts) > MAX_HOSTS_PER_SCAN:
+        raise ValueError(f"A scan cannot contain more than {MAX_HOSTS_PER_SCAN} discovered hosts")
+    validated_ports = _validate_scan_options(ports, timeout, workers)
     total_steps = len(hosts) * len(validated_ports)
+    if total_steps > MAX_TOTAL_PROBES:
+        raise ValueError(
+            f"Scan would create {total_steps:,} TCP probes; the safety limit is {MAX_TOTAL_PROBES:,}. "
+            "Use a narrower target scope."
+        )
     completed_steps = 0
 
     for host in hosts:

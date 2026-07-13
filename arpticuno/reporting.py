@@ -15,18 +15,27 @@ from arpticuno.ports import PortResult
 Payload = dict[str, Any]
 
 
-def build_payload(command: str, inputs: dict[str, Any], hosts: list[Host], ports: list[PortResult]) -> Payload:
+def build_payload(
+    command: str,
+    inputs: dict[str, Any],
+    hosts: list[Host],
+    ports: list[PortResult],
+    *,
+    started_at: str | None = None,
+) -> Payload:
     """Build the simple ARPTICUNO JSON/CSV/table data model."""
     ports_by_host: dict[str, list[PortResult]] = {}
     for result in ports:
         ports_by_host.setdefault(result.host, []).append(result)
 
+    finished_at = datetime.now(timezone.utc).isoformat()
     return {
         "tool": "Arpticuno",
         "version": __version__,
         "scan_id": str(uuid4()),
         "command": command,
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": started_at or finished_at,
+        "finished_at": finished_at,
         "inputs": inputs,
         "hosts": [_host_to_dict(host, ports_by_host.get(host.ip, [])) for host in hosts],
     }

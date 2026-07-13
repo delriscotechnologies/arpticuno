@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 import re
 from dataclasses import dataclass
-from time import perf_counter
 
 
 MAX_ARP_TARGETS = 65_536
-LOCAL_IPV4_RANGES = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
+MAX_DISCOVERED_HOSTS = 256
+LOCAL_IPV4_RANGES: tuple[ipaddress.IPv4Network, ...] = (
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("169.254.0.0/16"),
 )
 
 
@@ -82,7 +83,7 @@ def _parse_single_ipv4_target(value: str) -> ipaddress.IPv4Network:
         hint = "192.168.1.10" if "/" not in cleaned else "192.168.1.0/24"
         raise ValueError(f"Invalid IPv4 target: {cleaned}. Example: {hint}") from exc
 
-    if network.version != 4:
+    if not isinstance(network, ipaddress.IPv4Network):
         raise ValueError("ARP discovery only supports IPv4 targets")
     if not any(network.subnet_of(local_range) for local_range in LOCAL_IPV4_RANGES):
         raise ValueError("ARP discovery is limited to private/link-local IPv4 LAN ranges")
@@ -118,12 +119,41 @@ def arp_discover(
     for network in targets:
         packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(network))
         for _ in range(max(0, retries) + 1):
-            start = perf_counter()
             answered, _ = srp(packet, iface=iface, timeout=timeout, verbose=False)
-            elapsed_ms = round((perf_counter() - start) * 1000.0, 2)
 
-            for _, reply in answered:
-                ip = str(reply.psrc)
-                discovered[ip] = Host(ip=ip, mac=str(reply.hwsrc), rtt_ms=elapsed_ms)
+            for request, reply in answered:
+                try:
+                    reply_ip = ipaddress.ip_address(str(reply.psrc))
+                except ValueError:
+                    continue
+                if not isinstance(reply_ip, ipaddress.IPv4Address) or reply_ip not in network:
+                    continue
+
+                ip = str(reply_ip)
+                discovered[ip] = Host(
+                    ip=ip,
+                    mac=str(reply.hwsrc),
+                    rtt_ms=_arp_rtt_ms(request, reply),
+                )
+                if len(discovered) > MAX_DISCOVERED_HOSTS:
+                    raise ValueError(
+                        f"ARP discovery returned more than {MAX_DISCOVERED_HOSTS} hosts. "
+                        "Use a narrower target scope."
+                    )
 
     return [discovered[ip] for ip in sorted(discovered, key=ipaddress.ip_address)]
+
+
+def _arp_rtt_ms(request: object, reply: object) -> float | None:
+    """Return Scapy's per-packet ARP round-trip time when timestamps are available."""
+    sent_at = getattr(request, "sent_time", None)
+    received_at = getattr(reply, "time", None)
+    if sent_at is None or received_at is None:
+        return None
+    try:
+        elapsed = float(received_at) - float(sent_at)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(elapsed) or elapsed < 0:
+        return None
+    return round(elapsed * 1000.0, 2)

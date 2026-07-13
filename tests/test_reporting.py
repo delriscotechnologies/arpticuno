@@ -17,6 +17,8 @@ def test_build_payload_uses_simple_command_schema():
 
     assert payload["tool"] == "Arpticuno"
     assert payload["command"] == "scan"
+    assert payload["started_at"]
+    assert payload["finished_at"]
     assert payload["inputs"]["target"] == "192.168.1.0/24"
     assert payload["hosts"] == [
         {
@@ -28,6 +30,15 @@ def test_build_payload_uses_simple_command_schema():
             ],
         }
     ]
+
+
+def test_build_payload_preserves_actual_scan_start_time():
+    started_at = "2026-07-13T20:00:00+00:00"
+
+    payload = build_payload(command="scan", inputs={}, hosts=[], ports=[], started_at=started_at)
+
+    assert payload["started_at"] == started_at
+    assert payload["finished_at"] >= started_at
 
 
 def test_renderers_are_plain_and_beginner_friendly():

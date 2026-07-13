@@ -3,7 +3,15 @@ import socket
 
 import pytest
 
-from arpticuno.ports import PortResult, parse_ports, probe_connect, scan_ports_threaded, scan_tcp_ports
+from arpticuno.ports import (
+    MAX_HOSTS_PER_SCAN,
+    MAX_TOTAL_PROBES,
+    PortResult,
+    parse_ports,
+    probe_connect,
+    scan_ports_threaded,
+    scan_tcp_ports,
+)
 
 
 def test_parse_ports_supports_comma_ranges_and_dedupes():
@@ -104,3 +112,18 @@ def test_scan_ports_threaded_reports_progress():
 
     assert progress_updates
     assert progress_updates[-1] == (4, 4)
+
+
+def test_scan_ports_threaded_rejects_excessive_hosts():
+    hosts = [f"192.168.1.{index}" for index in range(MAX_HOSTS_PER_SCAN + 1)]
+
+    with pytest.raises(ValueError, match="discovered hosts"):
+        scan_ports_threaded(hosts, [22])
+
+
+def test_scan_ports_threaded_rejects_excessive_total_probe_count():
+    hosts = [f"192.168.1.{index}" for index in range(200)]
+    ports = list(range(1, (MAX_TOTAL_PROBES // len(hosts)) + 2))
+
+    with pytest.raises(ValueError, match="safety limit"):
+        scan_ports_threaded(hosts, ports)

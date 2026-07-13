@@ -113,6 +113,8 @@ Arpticuno v1 stays narrow on purpose:
 - the **first 7000 TCP ports** by default
 - reports focused on open ports
 - bounded target scope, timeout, retry, and worker behavior to reduce accidental resource exhaustion
+- ARP replies must belong to the requested target network
+- no more than 256 discovered hosts or 1,000,000 TCP probes per scan
 
 ## what Arpticuno does not do
 
@@ -154,3 +156,5 @@ sudo env "PATH=$PATH" arpticuno scan 192.168.1.0/24
 
 Arpticuno is intentionally simple right now.
 The goal is to keep the command surface clean, the behavior understandable, and the output easy to read.
+
+Automated CI runs the tests, linting, type checks, Bandit, and dependency auditing on every push and pull request. Security reports should follow [SECURITY.md](SECURITY.md).

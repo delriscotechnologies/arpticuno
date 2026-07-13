@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+from datetime import datetime, timezone
 from typing import Callable, Sequence, TextIO
+
+from scapy.error import Scapy_Exception
 
 from arpticuno import __version__
 from arpticuno.discovery import Host, arp_discover as default_arp_discover
@@ -62,11 +65,11 @@ def main(
         progress = _make_progress_reporter(args.format, err)
         payload = _run_command(args, arp_discover=arp_discover, probe=probe, ports_provider=ports_provider, progress=progress)
         if progress is not None:
-            progress(None, None, done_flag=True)
+            progress(None, None, True)
     except ValueError as exc:
         print(f"error: {exc}", file=err)
         return 2
-    except Exception as exc:  # Friendly failure for scapy/platform/runtime issues.
+    except (ImportError, OSError, RuntimeError, Scapy_Exception) as exc:
         print(f"error: {_friendly_runtime_error(exc)}", file=err)
         return 1
 
@@ -85,6 +88,7 @@ def _run_command(
     if args.command != "scan":
         raise ValueError(f"Unknown command: {args.command}")
 
+    started_at = datetime.now(timezone.utc).isoformat()
     parse_ipv4_targets(args.target)
     _validate_scan_options(args)
     hosts = arp_discover(args.target, args.iface, args.arp_timeout, args.retries)
@@ -96,7 +100,7 @@ def _run_command(
         workers=DEFAULT_WORKERS,
         probe=probe,
         open_only=True,
-        progress=(lambda done, total: progress(done, total, done_flag=False)) if progress is not None else None,
+        progress=(lambda done, total: progress(done, total, False)) if progress is not None else None,
     )
     return build_payload(
         command="scan",
@@ -109,6 +113,7 @@ def _run_command(
         },
         hosts=hosts,
         ports=results,
+        started_at=started_at,
     )
 
 
