@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subcommands = parser.add_subparsers(dest="command", required=True)
 
-    scan = subcommands.add_parser("scan", help="Discover live IPv4 hosts and scan TCP ports 1-7000")
+    scan = subcommands.add_parser("scan", help="Find IPv4 hosts that answer ARP and scan TCP ports 1-7000")
     scan.add_argument("target", help="IPv4 target: CIDR, single host, or a comma-separated list")
     scan.add_argument("--iface", help="Network interface to use for ARP, e.g. eth0")
     scan.add_argument("--arp-timeout", type=float, default=1.0, help="ARP timeout in seconds")
@@ -180,7 +180,7 @@ def _friendly_runtime_error(exc: Exception) -> str:
     ):
         return (
             "Npcap does not appear to be available on this Windows system. "
-            "Please install Npcap, enable WinPcap-compatible mode during setup, then run Arpticuno again."
+            "Please install Npcap, leave WinPcap-compatible mode disabled during setup, then run Arpticuno again."
         )
     return message
 

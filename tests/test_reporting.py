@@ -52,9 +52,9 @@ def test_renderers_are_plain_and_beginner_friendly():
     table = render_table(payload)
     assert '"command": "scan"' in render_json(payload)
     assert "Results:  Target(s): 127.0.0.1" in table
-    assert "│  Total active hosts: 1" in table
+    assert "│  Total ARP responders: 1" in table
     assert "│  Total open TCP ports: 0" in table
-    assert "Active hosts:" in table
+    assert "ARP responders:" in table
     assert "IPv4: 127.0.0.1" in table
     assert "MAC: unknown" in table
     assert "No open TCP ports found on this host." in table

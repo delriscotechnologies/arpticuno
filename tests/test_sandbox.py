@@ -8,8 +8,8 @@ def test_sandbox_preview_renders_banner_and_sections(capsys):
     assert code == 0
     assert "Results:" in output
     assert "Target(s):" in output
-    assert "│  Total active hosts:" in output
-    assert "Active hosts:" in output
+    assert "│  Total ARP responders:" in output
+    assert "ARP responders:" in output
     assert "192.168.1.1" in output
     banner_line = next(line for line in output.splitlines() if "Del Risco Technologies" in line)
     assert banner_line.startswith(" ")

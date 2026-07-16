@@ -72,17 +72,17 @@ def render_table(payload: Payload) -> str:
 
     summary = (
         f"Results:  Target(s): {target or '-'}  │  "
-        f"Total active hosts: {len(hosts)}  │  "
+        f"Total ARP responders: {len(hosts)}  │  "
         f"Total open TCP ports: {open_port_count}"
     )
     lines = [
         summary,
         "",
-        "Active hosts:",
+        "ARP responders:",
     ]
 
     if not hosts:
-        lines.append("  No active hosts found.")
+        lines.append("  No ARP responders found.")
         return "\n".join(lines) + "\n"
 
     for index, host in enumerate(hosts, start=1):

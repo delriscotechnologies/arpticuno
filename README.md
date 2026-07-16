@@ -15,7 +15,7 @@
 
 ---
 
-Arpticuno deliberately keeps network scanning small and understandable. Give it a local IPv4 target and it discovers live hosts with ARP, then checks the **first 7000 TCP ports** with normal socket connections.
+Arpticuno deliberately keeps network scanning small and understandable. Give it a local IPv4 target and it finds hosts that answer ARP, then checks the **first 7000 TCP ports** with normal socket connections.
 
 It has one public command, reports only useful findings by default, and avoids advanced scanning or evasion features.
 
@@ -55,7 +55,9 @@ Some WSL2 network modes do not expose LAN ARP traffic in the same way as native 
 
 ## What You Get
 
-The default report answers the two questions that matter after a basic LAN scan: which hosts answered, and which TCP ports were open. Closed and timed-out ports do not flood the terminal.
+The default report answers the two questions that matter after a basic LAN scan: which hosts answered ARP, and which TCP ports were open. Closed and timed-out ports do not flood the terminal.
+
+The example below is generated from the repository's synthetic sandbox data. It demonstrates the exact output format without claiming that these hosts came from a real LAN.
 
 ```text
       db                           mm     db
@@ -72,9 +74,9 @@ The default report answers the two questions that matter after a basic LAN scan:
                              ║  Del Risco Technologies  ║
                              ╚══════════════════════════╝
 
-Results:  Target(s): 192.168.1.0/24  │  Total active hosts: 3  │  Total open TCP ports: 5
+Results:  Target(s): 192.168.1.0/24  │  Total ARP responders: 3  │  Total open TCP ports: 5
 
-Active hosts:
+ARP responders:
   Host 1
     IPv4: 192.168.1.1
     MAC: aa:bb:cc:dd:ee:01
@@ -120,6 +122,8 @@ A scan has three stages:
 1. Validate that every requested target is a private or link-local IPv4 address.
 2. Send ARP discovery on the local LAN and keep replies that belong to the requested target.
 3. Run TCP connect checks against ports `1-7000` on each discovered host and report the open ports.
+
+Automated checks cover target validation, synthetic ARP replies, TCP probing against a local test socket, reporting, and safety limits. They do not reproduce a physical LAN end to end, so discovery should be verified on an authorized test segment before the results are relied upon.
 
 ## Scope and Safeguards
 

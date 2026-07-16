@@ -109,7 +109,7 @@ def arp_discover(
     timeout: float = 1.0,
     retries: int = 0,
 ) -> list[Host]:
-    """Discover live IPv4 hosts on the local LAN using ARP broadcast."""
+    """Find IPv4 hosts on the local LAN that answer an ARP broadcast."""
     targets = parse_ipv4_targets(target)
 
     from scapy.all import ARP, Ether, srp  # type: ignore

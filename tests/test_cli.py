@@ -32,7 +32,7 @@ def test_scan_command_shows_banner_in_table_mode(capsys):
     assert code == 0
     assert "Results:" in output
     assert "Target(s):" in output
-    assert "│  Total active hosts:" in output
+    assert "│  Total ARP responders:" in output
 
 
 def test_print_branding_centers_del_risco_block():
@@ -83,6 +83,7 @@ def test_scan_command_shows_friendly_npcap_error_on_windows(capsys, monkeypatch)
     captured = capsys.readouterr()
     assert code == 1
     assert "Npcap does not appear to be available" in captured.err
+    assert "leave WinPcap-compatible mode disabled" in captured.err
 
 
 def test_scan_command_works_without_specifying_ports(capsys):
