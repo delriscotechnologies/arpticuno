@@ -138,6 +138,8 @@ Arpticuno is intentionally limited:
 
 It does not perform SYN or UDP scans, service fingerprinting, operating-system detection, banner grabbing, spoofing, evasion, or internet-wide scanning.
 
+See [SECURITY.md](SECURITY.md) for reporting and handling guidance.
+
 ## License
 
 Arpticuno is available under the [MIT License](LICENSE).
