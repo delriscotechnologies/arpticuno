@@ -23,7 +23,7 @@ It has one public command, reports only useful findings by default, and avoids a
 
 ## Quick Start
 
-Arpticuno requires Python 3.10 or newer and a Linux environment with direct access to the LAN interface. On Ubuntu or WSL, install the base tools and the project:
+Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
 
 ```bash
 sudo apt update
@@ -132,7 +132,7 @@ Arpticuno is intentionally limited:
 - IPv4 and local ARP discovery only
 - private or link-local target ranges only
 - TCP connect scanning only
-- no more than 256 discovered hosts or 1,000,000 TCP probes per scan
+- up to 256 ARP responders, with a separate 1,000,000-probe limit; at the default 7,000-port range, TCP scanning is limited to 142 hosts
 - bounded target size, timeouts, retries, and worker counts
 - out-of-scope ARP replies are discarded
 
