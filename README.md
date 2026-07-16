@@ -134,17 +134,6 @@ Arpticuno is intentionally limited:
 
 It does not perform SYN or UDP scans, service fingerprinting, operating-system detection, banner grabbing, spoofing, evasion, or internet-wide scanning.
 
-## Development
-
-The locked development environment contains the test, lint, type, and security tools used by CI:
-
-```bash
-uv sync --locked --all-extras
-uv run pytest -q
-```
-
-Every push and pull request also runs Ruff, mypy, Bandit, dependency auditing, and CodeQL. Security reports should follow [SECURITY.md](SECURITY.md).
-
 ## License
 
 Arpticuno is available under the [MIT License](LICENSE).
