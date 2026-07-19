@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from datetime import datetime, timezone
 from typing import Callable, Sequence, TextIO
@@ -9,18 +8,22 @@ from typing import Callable, Sequence, TextIO
 from scapy.error import Scapy_Exception
 
 from arpticuno import __version__
-from arpticuno.discovery import Host, arp_discover as default_arp_discover
-from arpticuno.discovery import parse_ipv4_targets
-from arpticuno.ports import MAX_TIMEOUT_SECONDS, PortResult, Probe, probe_connect, scan_ports_threaded
+from arpticuno.discovery import (
+    Host,
+    arp_discover as default_arp_discover,
+    parse_ipv4_targets,
+    validate_arp_options,
+)
+from arpticuno.ports import PortResult, Probe, probe_connect, scan_ports_threaded
 from arpticuno.reporting import PROBE_STATES, build_payload, render_csv, render_json, render_table
 from arpticuno.ui import BANNER, TOP_ART
+
 
 DEFAULT_PORTS = tuple(range(1, 7001))
 DEFAULT_CONNECT_TIMEOUT = 0.2
 DEFAULT_WORKERS = 256
 
 AUTH_NOTICE = "Use only on systems and networks you own or have explicit permission to test."
-MAX_RETRIES = 5
 ArpDiscover = Callable[[str, str | None, float, int], list[Host]]
 PortProvider = Callable[[], Sequence[int]]
 
@@ -89,8 +92,8 @@ def _run_command(
         raise ValueError(f"Unknown command: {args.command}")
 
     started_at = datetime.now(timezone.utc).isoformat()
-    parse_ipv4_targets(args.target)
-    _validate_scan_options(args)
+    targets = parse_ipv4_targets(args.target)
+    _validate_scan_options(args, len(targets))
     hosts = arp_discover(args.target, args.iface, args.arp_timeout, args.retries)
     ports = list(ports_provider())
     probe_summaries = {host.ip: _empty_probe_summary() for host in hosts}
@@ -131,11 +134,8 @@ def _empty_probe_summary() -> dict[str, int]:
     return {"total": 0, **{state: 0 for state in PROBE_STATES}}
 
 
-def _validate_scan_options(args: argparse.Namespace) -> None:
-    if not math.isfinite(args.arp_timeout) or args.arp_timeout <= 0 or args.arp_timeout > MAX_TIMEOUT_SECONDS:
-        raise ValueError(f"ARP timeout must be greater than 0 and no more than {MAX_TIMEOUT_SECONDS:g} seconds")
-    if args.retries < 0 or args.retries > MAX_RETRIES:
-        raise ValueError(f"Retries must be between 0 and {MAX_RETRIES}")
+def _validate_scan_options(args: argparse.Namespace, target_count: int) -> None:
+    validate_arp_options(args.arp_timeout, args.retries, target_count)
 
 
 def _branding_width() -> int:
