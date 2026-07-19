@@ -57,12 +57,14 @@ jobs:
       - name: Run AppSec regression tests
         run: uv run --no-sync pytest -q tests/test_appsec_hardening.py
 
-      - name: Run lint and type checks
-        run: |
-          uv run --no-sync ruff check arpticuno tests
-          uv run --no-sync mypy arpticuno
+      - name: Run Ruff
+        run: uv run --no-sync ruff check arpticuno tests
 
-      - name: Run security checks
-        run: |
-          uv run --no-sync bandit -q -r arpticuno
-          uv run --no-sync pip-audit --local --skip-editable
+      - name: Run mypy
+        run: uv run --no-sync mypy arpticuno
+
+      - name: Run Bandit
+        run: uv run --no-sync bandit -q -r arpticuno
+
+      - name: Run dependency audit
+        run: uv run --no-sync pip-audit --local --skip-editable
