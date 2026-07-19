@@ -60,8 +60,20 @@ jobs:
       - name: Run Ruff
         run: uv run --no-sync ruff check arpticuno tests
 
-      - name: Run mypy
-        run: uv run --no-sync mypy arpticuno
+      - name: Type-check discovery
+        run: uv run --no-sync mypy arpticuno/discovery.py
+
+      - name: Type-check ports
+        run: uv run --no-sync mypy arpticuno/ports.py
+
+      - name: Type-check reporting
+        run: uv run --no-sync mypy arpticuno/reporting.py
+
+      - name: Type-check CLI
+        run: uv run --no-sync mypy arpticuno/cli.py
+
+      - name: Type-check sandbox
+        run: uv run --no-sync mypy arpticuno/sandbox.py
 
       - name: Run Bandit
         run: uv run --no-sync bandit -q -r arpticuno
