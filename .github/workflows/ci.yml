@@ -47,7 +47,25 @@ jobs:
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
 
-      - name: Run tests
+      - name: Run discovery tests
+        run: uv run --no-sync pytest -q tests/test_discovery.py
+
+      - name: Run port tests
+        run: uv run --no-sync pytest -q tests/test_ports.py
+
+      - name: Run reporting tests
+        run: uv run --no-sync pytest -q tests/test_reporting.py
+
+      - name: Run CLI tests
+        run: uv run --no-sync pytest -q tests/test_cli.py
+
+      - name: Run sandbox tests
+        run: uv run --no-sync pytest -q tests/test_sandbox.py
+
+      - name: Run AppSec regression tests
+        run: uv run --no-sync pytest -q tests/test_appsec_hardening.py
+
+      - name: Run complete test discovery
         run: uv run --no-sync pytest -q
 
       - name: Run Ruff
