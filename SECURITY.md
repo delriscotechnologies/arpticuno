@@ -14,6 +14,8 @@ Include the affected version, reproduction steps, impact, and any suggested miti
 
 The Arpticuno CLI and batch scan APIs accept only private or link-local IPv4 LAN targets. They reject public IPv4 addresses, hostnames, IPv6 addresses, loopback addresses, malformed ARP replies, and ARP replies outside the requested target.
 
+ARP target lists are limited to 256 raw entries and 65,536 unique addresses. Duplicate and overlapping networks are collapsed, and the combination of target networks and retries cannot exceed 512 ARP request rounds.
+
 `probe_connect()` is a low-level socket primitive and intentionally does not enforce scope. Applications using it directly are responsible for authorization and target validation.
 
 Host and TCP-probe limits, bounded task submission, timeouts, retries, and worker limits reduce accidental resource exhaustion. Probe failures remain visible in structured summaries so timeouts or routing failures are not mistaken for confirmed closed ports.
@@ -34,4 +36,6 @@ Do not pass an untrusted or user-modifiable `PATH` into `sudo` when launching Ar
 
 ## Dependency and build security
 
-Runtime and development dependencies are version-pinned and resolved through `uv.lock`. CI uses minimal token permissions, pinned GitHub Action commits, bounded job timeouts, dependency auditing, Bandit, Ruff, mypy, pytest, and CodeQL. Third-party license information is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Runtime and development dependencies are version-pinned and resolved through `uv.lock`. CI installs `uv` through the official `astral-sh/setup-uv` action, pins both the action commit and the `uv` version, and verifies the installed version before use.
+
+CI also uses minimal token permissions, pinned GitHub Action commits, bounded job timeouts, complete pytest discovery, dependency auditing, Bandit, Ruff, mypy, and CodeQL. Third-party license information is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

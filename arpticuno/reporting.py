@@ -14,6 +14,7 @@ from arpticuno.ports import PortResult
 
 Payload = dict[str, Any]
 PROBE_STATES = ("open", "closed", "timeout", "unreachable", "error")
+FORMULA_PREFIXES = ("=", "+", "-", "@")
 
 
 def build_payload(
@@ -203,15 +204,15 @@ def render_csv(payload: Payload) -> str:
     target = payload.get("inputs", {}).get("target") or payload.get("inputs", {}).get("cidr", "")
     hosts = payload.get("hosts", [])
     if not hosts:
-        writer.writerow(_scan_row(payload, target))
+        writer.writerow(_sanitize_csv_row(_scan_row(payload, target)))
         return buffer.getvalue()
 
     for host in hosts:
         if not host.get("ports"):
-            writer.writerow(_row(payload, target, host, None))
+            writer.writerow(_sanitize_csv_row(_row(payload, target, host, None)))
             continue
         for port in host["ports"]:
-            writer.writerow(_row(payload, target, host, port))
+            writer.writerow(_sanitize_csv_row(_row(payload, target, host, port)))
 
     return buffer.getvalue()
 
@@ -254,7 +255,7 @@ def _row(payload: Payload, target: str, host: dict[str, Any], port: dict[str, An
         "proto": "" if port is None else port["proto"],
         "state": "" if port is None else port["state"],
         "latency_ms": "" if port is None else _display(port.get("latency_ms"), empty=""),
-        "error": "" if port is None else _csv_safe(port.get("error") or ""),
+        "error": "" if port is None else port.get("error") or "",
         "started_at": payload.get("started_at", ""),
         "finished_at": payload.get("finished_at", ""),
         "record_type": "host" if port is None else "port",
@@ -268,8 +269,18 @@ def _row(payload: Payload, target: str, host: dict[str, Any], port: dict[str, An
     }
 
 
-def _csv_safe(value: str) -> str:
-    return f"'{value}" if value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
+def _sanitize_csv_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: _csv_safe(value) for key, value in row.items()}
+
+
+def _csv_safe(value: Any) -> Any:
+    if not isinstance(value, str) or not value:
+        return value
+
+    stripped = value.lstrip(" \t\r\n")
+    if value.startswith(("\t", "\r", "\n")) or stripped.startswith(FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
 
 
 def _display(value: Any, empty: str = "-") -> str:

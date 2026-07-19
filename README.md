@@ -23,7 +23,7 @@ It has one public command, reports useful findings and probe-health summaries, a
 
 ## Quick Start
 
-Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI tests Python 3.10 through 3.14. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
+Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI currently verifies Python 3.10 through 3.14; newer interpreters are not yet part of the compatibility matrix. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
 
 ```bash
 sudo apt update
@@ -36,7 +36,7 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
-Run a scan with the virtual environment executable by absolute path. This avoids passing a user-controlled `PATH` into a privileged process:
+The public command shape is `arpticuno scan <target>`. Run it with the virtual environment executable by absolute path to avoid passing a user-controlled `PATH` into a privileged process:
 
 ```bash
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24
@@ -112,7 +112,7 @@ Choose the same findings in the format that fits the next step:
 | `json` | Scripts and structured tooling |
 | `csv` | Spreadsheets, pipelines, and SIEM ingestion; even zero-host scans contain an auditable summary row |
 
-CSV text fields that could be interpreted as spreadsheet formulas are neutralized before output.
+Every CSV text cell that could be interpreted as a spreadsheet formula is neutralized before output, including values with leading whitespace or control characters.
 
 Preview the complete terminal experience with synthetic data and no network traffic:
 
@@ -124,11 +124,11 @@ python -m arpticuno.sandbox
 
 A scan has three stages:
 
-1. Validate that every requested target is a private or link-local IPv4 address.
+1. Validate that every requested target is a private or link-local IPv4 address. Duplicate and overlapping entries are collapsed before any packets are sent.
 2. Send ARP discovery on the local LAN and retain well-formed replies that belong to the requested target. ARP is unauthenticated and does not prove device identity.
 3. Run bounded TCP connect checks against ports `1-7000` on each discovered host and report open ports plus aggregate outcomes.
 
-Automated checks cover target validation, malformed and conflicting ARP observations, TCP probing against a local test socket, bounded scan behavior, reporting, CSV safety, and safety limits. They do not reproduce a physical LAN end to end, so discovery should be verified on an authorized test segment before the results are relied upon.
+Automated checks use pytest's complete test discovery and cover target validation, malformed and conflicting ARP observations, TCP probing against a local test socket, bounded scan behavior, reporting, CSV safety, and safety limits. They do not reproduce a physical LAN end to end, so discovery should be verified on an authorized test segment before the results are relied upon.
 
 ## Scope and Safeguards
 
@@ -137,13 +137,15 @@ Arpticuno is intentionally limited:
 - IPv4 and local ARP discovery only
 - private or link-local target ranges only in the CLI and batch scan APIs
 - TCP connect scanning only
+- at most 256 raw target-list entries, 65,536 unique target addresses, and 512 total ARP request rounds
 - up to 256 ARP responders, with a separate 1,000,000-probe limit; at the default 7,000-port range, TCP scanning is limited to 142 hosts
 - bounded target size, timeouts, retries, worker counts, and queued TCP tasks
+- duplicate and overlapping ARP targets are collapsed before scanning
 - out-of-scope and malformed ARP replies are discarded
 - conflicting MAC addresses observed for one IPv4 address are reported as `unknown`
 - timeouts, unreachable results, and errors are retained as summaries so an inconclusive scan is not presented as a clean negative
 
-`probe_connect()` is a low-level single-socket helper and does not enforce authorization or local-network scope. The public CLI, `scan_tcp_ports()`, and `scan_ports_threaded()` enforce private/link-local IPv4 targets.
+`probe_connect()` is a low-level single-socket helper and does not enforce authorization or local-network scope. The public CLI, `arp_discover()`, `scan_tcp_ports()`, and `scan_ports_threaded()` enforce their documented safety limits.
 
 It does not perform SYN or UDP scans, service fingerprinting, operating-system detection, banner grabbing, spoofing, evasion, or internet-wide scanning.
 

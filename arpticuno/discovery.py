@@ -7,6 +7,10 @@ from dataclasses import dataclass
 
 
 MAX_ARP_TARGETS = 65_536
+MAX_ARP_TARGET_ENTRIES = 256
+MAX_ARP_REQUEST_ROUNDS = 512
+MAX_ARP_TIMEOUT_SECONDS = 10.0
+MAX_ARP_RETRIES = 5
 MAX_DISCOVERED_HOSTS = 256
 LOCAL_IPV4_RANGES: tuple[ipaddress.IPv4Network, ...] = (
     ipaddress.IPv4Network("10.0.0.0/8"),
@@ -39,8 +43,32 @@ def validate_local_ipv4_host(value: str) -> str:
     return str(address)
 
 
+def validate_arp_options(timeout: float, retries: int, target_count: int = 1) -> None:
+    """Validate ARP timing and bound the total number of request rounds."""
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout):
+        raise ValueError("ARP timeout must be a finite number")
+    if timeout <= 0 or timeout > MAX_ARP_TIMEOUT_SECONDS:
+        raise ValueError(
+            f"ARP timeout must be greater than 0 and no more than {MAX_ARP_TIMEOUT_SECONDS:g} seconds"
+        )
+    if isinstance(retries, bool) or not isinstance(retries, int):
+        raise ValueError("Retries must be an integer")
+    if retries < 0 or retries > MAX_ARP_RETRIES:
+        raise ValueError(f"Retries must be between 0 and {MAX_ARP_RETRIES}")
+    if isinstance(target_count, bool) or not isinstance(target_count, int) or target_count < 1:
+        raise ValueError("ARP discovery requires a positive target count")
+
+    request_rounds = target_count * (retries + 1)
+    if request_rounds > MAX_ARP_REQUEST_ROUNDS:
+        raise ValueError(
+            f"ARP discovery would create {request_rounds:,} request rounds; "
+            f"the safety limit is {MAX_ARP_REQUEST_ROUNDS:,}. "
+            "Use fewer target entries or retries."
+        )
+
+
 def parse_ipv4_targets(value: str) -> list[ipaddress.IPv4Network]:
-    """Validate one or more IPv4 targets for ARP discovery.
+    """Validate and collapse one or more IPv4 targets for ARP discovery.
 
     Accepted forms:
     - single IPv4 CIDR: 192.168.1.0/24
@@ -58,15 +86,17 @@ def parse_ipv4_targets(value: str) -> list[ipaddress.IPv4Network]:
     raw_targets = [part.strip() for part in cleaned.split(",")]
     if any(not part for part in raw_targets):
         raise ValueError("Target list contains an empty entry. Remove extra commas and try again.")
+    if len(raw_targets) > MAX_ARP_TARGET_ENTRIES:
+        raise ValueError(
+            f"Target list cannot contain more than {MAX_ARP_TARGET_ENTRIES} entries. "
+            "Use CIDR notation or a narrower list."
+        )
 
-    networks: list[ipaddress.IPv4Network] = []
-    total_addresses = 0
-    for raw_target in raw_targets:
-        network = _parse_single_ipv4_target(raw_target)
-        total_addresses += network.num_addresses
-        if total_addresses > MAX_ARP_TARGETS:
-            raise ValueError("Target list is too large for safe LAN ARP discovery. Use /16 or smaller total scope.")
-        networks.append(network)
+    parsed_networks = [_parse_single_ipv4_target(raw_target) for raw_target in raw_targets]
+    networks = list(ipaddress.collapse_addresses(parsed_networks))
+    total_addresses = sum(network.num_addresses for network in networks)
+    if total_addresses > MAX_ARP_TARGETS:
+        raise ValueError("Target list is too large for safe LAN ARP discovery. Use /16 or smaller total scope.")
     return networks
 
 
@@ -127,6 +157,7 @@ def arp_discover(
 ) -> list[Host]:
     """Record matching IPv4 ARP replies observed on the local LAN."""
     targets = parse_ipv4_targets(target)
+    validate_arp_options(timeout, retries, len(targets))
 
     from scapy.all import ARP, Ether, srp  # type: ignore
 
@@ -135,7 +166,7 @@ def arp_discover(
 
     for network in targets:
         packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(network))
-        for _ in range(max(0, retries) + 1):
+        for _ in range(retries + 1):
             answered, _ = srp(packet, iface=iface, timeout=timeout, verbose=False)
 
             for request, reply in answered:

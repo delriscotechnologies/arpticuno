@@ -31,49 +31,30 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
 
       - name: Install uv
-        run: python -m pip install --disable-pip-version-check uv==0.10.11
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+
+      - name: Verify uv version
+        run: |
+          case "$(uv --version)" in
+            "uv 0.11.29"*) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
 
-      - name: Run discovery tests
-        run: uv run --no-sync pytest -q tests/test_discovery.py
-
-      - name: Run port tests
-        run: uv run --no-sync pytest -q tests/test_ports.py
-
-      - name: Run reporting tests
-        run: uv run --no-sync pytest -q tests/test_reporting.py
-
-      - name: Run CLI tests
-        run: uv run --no-sync pytest -q tests/test_cli.py
-
-      - name: Run sandbox tests
-        run: uv run --no-sync pytest -q tests/test_sandbox.py
-
-      - name: Run AppSec regression tests
-        run: uv run --no-sync pytest -q tests/test_appsec_hardening.py
+      - name: Run complete test discovery
+        run: uv run --no-sync pytest -q
 
       - name: Run Ruff
         run: uv run --no-sync ruff check arpticuno tests
 
-      - name: Type-check discovery
-        run: uv run --no-sync mypy arpticuno/discovery.py
-
-      - name: Type-check ports
-        run: uv run --no-sync mypy arpticuno/ports.py
-
-      - name: Type-check reporting
-        run: uv run --no-sync mypy arpticuno/reporting.py
-
-      - name: Type-check CLI
-        run: uv run --no-sync mypy arpticuno/cli.py
-
-      - name: Type-check sandbox
-        run: uv run --no-sync mypy arpticuno/sandbox.py
+      - name: Run mypy
+        run: uv run --no-sync mypy arpticuno
 
       - name: Run Bandit
         run: uv run --no-sync bandit -q -r arpticuno

@@ -94,10 +94,10 @@ def test_arp_discovery_rejects_malformed_data_and_marks_mac_conflicts_unknown(mo
     assert arp_discover("192.168.1.0/24") == [Host(ip="192.168.1.10", mac=None, rtt_ms=12.0)]
 
 
-def test_empty_csv_contains_auditable_scan_row_and_formula_text_is_neutralized():
+def test_empty_csv_contains_auditable_scan_row_and_all_formula_text_is_neutralized():
     empty_payload = build_payload(
-        command="scan",
-        inputs={"target": "192.168.1.0/24"},
+        command="=scan",
+        inputs={"target": "  =HYPERLINK(\"x\")"},
         hosts=[],
         ports=[],
     )
@@ -105,15 +105,20 @@ def test_empty_csv_contains_auditable_scan_row_and_formula_text_is_neutralized()
     assert len(empty_rows) == 1
     assert empty_rows[0]["scan_id"] == empty_payload["scan_id"]
     assert empty_rows[0]["status"] == "no-arp-responders"
+    assert empty_rows[0]["command"].startswith("'=")
+    assert empty_rows[0]["target"].startswith("'  =")
 
     error_payload = build_payload(
-        command="scan",
-        inputs={"target": "192.168.1.10"},
-        hosts=[Host(ip="192.168.1.10")],
-        ports=[PortResult(host="192.168.1.10", port=22, state="error", error="=HYPERLINK(\"x\")")],
+        command="@scan",
+        inputs={"target": "+target"},
+        hosts=[Host(ip="-host", mac="\tmac")],
+        ports=[PortResult(host="-host", port=22, state="error", error="\r=HYPERLINK(\"x\")")],
     )
     error_rows = list(csv.DictReader(StringIO(render_csv(error_payload))))
-    assert error_rows[0]["error"].startswith("'=")
+    row = error_rows[0]
+
+    for field in ("command", "target", "host_ip", "host_mac", "error"):
+        assert row[field].startswith("'")
 
 
 def test_sandbox_documents_complete_probe_counts():

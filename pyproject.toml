@@ -31,3 +31,6 @@ arpticuno = "arpticuno.cli:main"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.uv]
+required-version = "==0.11.29"
