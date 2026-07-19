@@ -23,15 +23,23 @@ def build_demo_payload() -> dict:
         PortResult(host="192.168.1.10", port=443, proto="tcp", state="open", latency_ms=1.8),
         PortResult(host="192.168.1.25", port=3389, proto="tcp", state="open", latency_ms=2.1),
     ]
+    probe_summaries = {
+        "192.168.1.1": {"total": 7000, "open": 2, "closed": 6998},
+        "192.168.1.10": {"total": 7000, "open": 2, "closed": 6998},
+        "192.168.1.25": {"total": 7000, "open": 1, "closed": 6999},
+    }
     return build_payload(
         command="scan",
         inputs={
             "target": "192.168.1.0/24",
             "port_range": "1-7000",
+            "connect_timeout": 0.2,
+            "workers": 256,
             "sandbox": True,
         },
         hosts=hosts,
         ports=ports,
+        probe_summaries=probe_summaries,
     )
 
 
