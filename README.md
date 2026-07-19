@@ -36,6 +36,8 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
+This end-user installation path uses the constraints in `pyproject.toml`; it does not read `uv.lock`. Scapy is pinned exactly, while `pip` resolves a compatible build backend in an isolated build environment. To reproduce the repository's locked CI and development environment instead, use the required `uv` 0.11.29 and run `uv sync --locked --all-extras` from the checkout.
+
 The public command shape is `arpticuno scan <target>`. Run it with the virtual environment executable by absolute path to avoid passing a user-controlled `PATH` into a privileged process:
 
 ```bash

@@ -36,6 +36,8 @@ Do not pass an untrusted or user-modifiable `PATH` into `sudo` when launching Ar
 
 ## Dependency and build security
 
-Runtime and development dependencies are version-pinned and resolved through `uv.lock`. CI installs `uv` through the official `astral-sh/setup-uv` action, pins both the action commit and the `uv` version, and verifies the installed version before use.
+The runtime Scapy dependency is pinned exactly in `pyproject.toml`. Repository CI and development dependencies are resolved with hashes in `uv.lock`, and CI refuses to update that lock during installation. The README's end-user `pip install .` path uses `pyproject.toml` constraints rather than `uv.lock`; its isolated build environment may select any compatible Hatchling release in the declared range.
+
+CI installs `uv` separately through the official `astral-sh/setup-uv` action, pins both the action commit and `uv` version 0.11.29, verifies the installed version, and runs `uv sync --locked --all-extras`.
 
 CI also uses minimal token permissions, pinned GitHub Action commits, bounded job timeouts, complete pytest discovery, dependency auditing, Bandit, Ruff, mypy, and CodeQL. Third-party license information is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

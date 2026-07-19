@@ -14,6 +14,8 @@ The complete Scapy license text and corresponding source are available from the 
 
 ## Development dependencies
 
-The locked development environment also contains pytest, Ruff, mypy, Bandit, pip-audit, uv, and their transitive dependencies. These tools are used for testing, linting, type checking, security analysis, dependency auditing, and environment management; each retains its upstream license.
+The locked development environment also contains pytest, Ruff, mypy, Bandit, pip-audit, and their transitive dependencies. These packages are used for testing, linting, type checking, security analysis, and dependency auditing; each retains its upstream license.
+
+The Hatchling build backend is declared as a compatible version range in `pyproject.toml`, and the `uv` environment manager is provisioned separately at version 0.11.29. Neither is a package entry in `uv.lock`; both retain their upstream licenses.
 
 Redistributors should review the locked dependency set and include any notices or source offers required by the way they package or distribute Arpticuno and its dependencies.
