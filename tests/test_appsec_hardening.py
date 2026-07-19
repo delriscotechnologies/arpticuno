@@ -10,7 +10,7 @@ import pytest
 from arpticuno.cli import main
 from arpticuno.discovery import Host, arp_discover, validate_local_ipv4_host
 from arpticuno.ports import PortResult, scan_ports_threaded, scan_tcp_ports
-from arpticuno.reporting import build_payload, render_csv, render_table
+from arpticuno.reporting import _csv_safe, build_payload, render_csv, render_table
 from arpticuno.sandbox import build_demo_payload
 
 
@@ -119,6 +119,17 @@ def test_empty_csv_contains_auditable_scan_row_and_all_formula_text_is_neutraliz
 
     for field in ("command", "target", "host_ip", "host_mac", "error"):
         assert row[field].startswith("'")
+
+
+@pytest.mark.parametrize("leading", ["\x00", "\v", "\f", "\u00a0", "\u200b", " \x00\t"])
+def test_csv_formula_neutralization_handles_unicode_whitespace_and_controls(leading):
+    value = f"{leading}=HYPERLINK(\"x\")"
+    assert _csv_safe(value) == f"'{value}"
+
+
+def test_csv_safety_preserves_non_formula_text_with_unicode_whitespace():
+    value = "\u00a0ordinary report label"
+    assert _csv_safe(value) == value
 
 
 def test_sandbox_documents_complete_probe_counts():

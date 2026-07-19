@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import unicodedata
 from datetime import datetime, timezone
 from io import StringIO
 from typing import Any, cast
@@ -277,8 +278,17 @@ def _csv_safe(value: Any) -> Any:
     if not isinstance(value, str) or not value:
         return value
 
-    stripped = value.lstrip(" \t\r\n")
-    if value.startswith(("\t", "\r", "\n")) or stripped.startswith(FORMULA_PREFIXES):
+    first_visible = 0
+    leading_control = False
+    while first_visible < len(value):
+        character = value[first_visible]
+        is_control = unicodedata.category(character).startswith("C")
+        if not character.isspace() and not is_control:
+            break
+        leading_control = leading_control or is_control
+        first_visible += 1
+
+    if leading_control or value[first_visible:].startswith(FORMULA_PREFIXES):
         return f"'{value}"
     return value
 
