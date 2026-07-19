@@ -38,7 +38,11 @@ jobs:
           version: "0.11.29"
 
       - name: Verify uv version
-        run: test "$(uv --version)" = "uv 0.11.29"
+        run: |
+          case "$(uv --version)" in
+            "uv 0.11.29"*) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
