@@ -4,7 +4,7 @@ import csv
 import json
 from datetime import datetime, timezone
 from io import StringIO
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from arpticuno import __version__
@@ -57,7 +57,7 @@ def _host_to_dict(
     include_probe_summary: bool,
     supplied_summary: dict[str, int] | None,
 ) -> dict[str, Any]:
-    payload = {
+    payload: dict[str, Any] = {
         "ip": host.ip,
         "mac": host.mac,
         "arp_rtt_ms": host.rtt_ms,
@@ -81,7 +81,7 @@ def _normalize_probe_summary(
     ports: list[PortResult],
     supplied_summary: dict[str, int] | None,
 ) -> dict[str, int]:
-    counts = {state: 0 for state in PROBE_STATES}
+    counts: dict[str, int] = {state: 0 for state in PROBE_STATES}
     supplied_total = 0
 
     if supplied_summary is None:
@@ -100,9 +100,9 @@ def _normalize_probe_summary(
 def _summary_for_host(host: dict[str, Any]) -> dict[str, int]:
     supplied = host.get("probe_summary")
     if isinstance(supplied, dict):
-        return _normalize_probe_summary([], supplied)
+        return _normalize_probe_summary([], cast(dict[str, int], supplied))
 
-    counts = {state: 0 for state in PROBE_STATES}
+    counts: dict[str, int] = {state: 0 for state in PROBE_STATES}
     for port in host.get("ports", []):
         state = port.get("state")
         counts[state if state in counts else "error"] += 1
