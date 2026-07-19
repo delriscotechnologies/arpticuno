@@ -36,7 +36,7 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
-Run a scan with the virtual environment executable by absolute path. This avoids passing a user-controlled `PATH` into a privileged process:
+The public command shape is `arpticuno scan <target>`. Run it with the virtual environment executable by absolute path to avoid passing a user-controlled `PATH` into a privileged process:
 
 ```bash
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24
