@@ -3,10 +3,13 @@ from __future__ import annotations
 import errno
 import math
 import socket
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable, Sequence
+
+from arpticuno.discovery import validate_local_ipv4_host
+
 
 ALL_TCP_PORTS = tuple(range(1, 65536))
 MAX_WORKERS = 512
@@ -14,6 +17,7 @@ MAX_TIMEOUT_SECONDS = 10.0
 MAX_PORTS_PER_HOST = 65_535
 MAX_HOSTS_PER_SCAN = 256
 MAX_TOTAL_PROBES = 1_000_000
+MAX_PENDING_PER_WORKER = 2
 
 
 @dataclass(frozen=True)
@@ -77,7 +81,10 @@ def _latency_ms(start: float) -> float:
 
 
 def probe_connect(host: str, port: int, timeout: float = 0.75) -> PortResult:
-    """Probe one TCP port using a normal kernel-managed TCP connect attempt."""
+    """Probe one TCP port using a normal kernel-managed TCP connect attempt.
+
+    This is a low-level primitive. Batch scan APIs enforce private/link-local IPv4 scope.
+    """
     start = perf_counter()
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -99,6 +106,7 @@ def probe_connect(host: str, port: int, timeout: float = 0.75) -> PortResult:
 
 Probe = Callable[[str, int, float], PortResult]
 ProgressCallback = Callable[[int, int], None]
+ResultCallback = Callable[[PortResult], None]
 
 
 def scan_tcp_ports(
@@ -109,25 +117,45 @@ def scan_tcp_ports(
     workers: int = 256,
     open_only: bool = False,
     progress: ProgressCallback | None = None,
+    result_callback: ResultCallback | None = None,
 ) -> list[PortResult]:
-    """Scan many ports on one host using a thread pool."""
+    """Scan many ports on one authorized LAN host with bounded concurrency."""
+    validated_host = validate_local_ipv4_host(host)
     validated_ports = _validate_scan_options(ports, timeout, workers)
     if not validated_ports:
         return []
 
     results_by_index: list[PortResult | None] = [None] * len(validated_ports)
     completed = 0
+    indexed_ports = iter(enumerate(validated_ports))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        future_map = {
-            pool.submit(probe, host, port, timeout): index for index, port in enumerate(validated_ports)
-        }
-        for future in as_completed(future_map):
-            index = future_map[future]
-            results_by_index[index] = future.result()
-            completed += 1
-            if progress is not None:
-                progress(completed, len(validated_ports))
+        pending: dict[Future[PortResult], int] = {}
+
+        def submit_next() -> bool:
+            try:
+                index, port = next(indexed_ports)
+            except StopIteration:
+                return False
+            pending[pool.submit(probe, validated_host, port, timeout)] = index
+            return True
+
+        initial_pending = min(len(validated_ports), workers * MAX_PENDING_PER_WORKER)
+        for _ in range(initial_pending):
+            submit_next()
+
+        while pending:
+            completed_futures, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+            for future in completed_futures:
+                index = pending.pop(future)
+                result = future.result()
+                results_by_index[index] = result
+                completed += 1
+                if result_callback is not None:
+                    result_callback(result)
+                if progress is not None:
+                    progress(completed, len(validated_ports))
+                submit_next()
 
     results = [result for result in results_by_index if result is not None]
     if open_only:
@@ -143,21 +171,27 @@ def scan_ports_threaded(
     probe: Probe = probe_connect,
     open_only: bool = False,
     progress: ProgressCallback | None = None,
+    result_callback: ResultCallback | None = None,
 ) -> list[PortResult]:
-    """Scan multiple hosts by scanning each host with the shared port engine."""
-    results: list[PortResult] = []
+    """Scan multiple authorized LAN hosts with the shared bounded port engine."""
     if len(hosts) > MAX_HOSTS_PER_SCAN:
         raise ValueError(f"A scan cannot contain more than {MAX_HOSTS_PER_SCAN} discovered hosts")
+    validated_hosts = list(dict.fromkeys(validate_local_ipv4_host(host) for host in hosts))
+    if len(validated_hosts) > MAX_HOSTS_PER_SCAN:
+        raise ValueError(f"A scan cannot contain more than {MAX_HOSTS_PER_SCAN} discovered hosts")
+
     validated_ports = _validate_scan_options(ports, timeout, workers)
-    total_steps = len(hosts) * len(validated_ports)
+    total_steps = len(validated_hosts) * len(validated_ports)
     if total_steps > MAX_TOTAL_PROBES:
         raise ValueError(
             f"Scan would create {total_steps:,} TCP probes; the safety limit is {MAX_TOTAL_PROBES:,}. "
             "Use a narrower target scope."
         )
+
+    results: list[PortResult] = []
     completed_steps = 0
 
-    for host in hosts:
+    for host in validated_hosts:
         previous_done_for_host = 0
 
         def host_progress(done_for_host: int, total_for_host: int) -> None:
@@ -176,6 +210,7 @@ def scan_ports_threaded(
                 workers=workers,
                 open_only=open_only,
                 progress=host_progress if total_steps else None,
+                result_callback=result_callback,
             )
         )
     return results

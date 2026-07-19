@@ -8,17 +8,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -32,16 +39,44 @@ jobs:
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
 
-      - name: Run tests
-        run: uv run --no-sync pytest -q
+      - name: Run discovery tests
+        run: uv run --no-sync pytest -q tests/test_discovery.py
 
-      - name: Run lint and type checks
-        run: |
-          uv run --no-sync ruff check arpticuno tests
-          uv run --no-sync mypy arpticuno
+      - name: Run port tests
+        run: uv run --no-sync pytest -q tests/test_ports.py
 
-      - name: Run security checks
-        run: |
-          uv run --no-sync bandit -q -r arpticuno
-          uv run --no-sync pip-audit --local --skip-editable
+      - name: Run reporting tests
+        run: uv run --no-sync pytest -q tests/test_reporting.py
 
+      - name: Run CLI tests
+        run: uv run --no-sync pytest -q tests/test_cli.py
+
+      - name: Run sandbox tests
+        run: uv run --no-sync pytest -q tests/test_sandbox.py
+
+      - name: Run AppSec regression tests
+        run: uv run --no-sync pytest -q tests/test_appsec_hardening.py
+
+      - name: Run Ruff
+        run: uv run --no-sync ruff check arpticuno tests
+
+      - name: Type-check discovery
+        run: uv run --no-sync mypy arpticuno/discovery.py
+
+      - name: Type-check ports
+        run: uv run --no-sync mypy arpticuno/ports.py
+
+      - name: Type-check reporting
+        run: uv run --no-sync mypy arpticuno/reporting.py
+
+      - name: Type-check CLI
+        run: uv run --no-sync mypy arpticuno/cli.py
+
+      - name: Type-check sandbox
+        run: uv run --no-sync mypy arpticuno/sandbox.py
+
+      - name: Run Bandit
+        run: uv run --no-sync bandit -q -r arpticuno
+
+      - name: Run dependency audit
+        run: uv run --no-sync pip-audit --local --skip-editable

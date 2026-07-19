@@ -12,5 +12,26 @@ Include the affected version, reproduction steps, impact, and any suggested miti
 
 ## Intended scope
 
-Arpticuno is limited to authorized private or link-local IPv4 LAN targets. It rejects out-of-scope ARP replies and applies host and TCP-probe limits to reduce accidental resource exhaustion.
+The Arpticuno CLI and batch scan APIs accept only private or link-local IPv4 LAN targets. They reject public IPv4 addresses, hostnames, IPv6 addresses, loopback addresses, malformed ARP replies, and ARP replies outside the requested target.
 
+`probe_connect()` is a low-level socket primitive and intentionally does not enforce scope. Applications using it directly are responsible for authorization and target validation.
+
+Host and TCP-probe limits, bounded task submission, timeouts, retries, and worker limits reduce accidental resource exhaustion. Probe failures remain visible in structured summaries so timeouts or routing failures are not mistaken for confirmed closed ports.
+
+## ARP trust boundary
+
+ARP is unauthenticated. A matching reply shows only that an ARP response was observed; it does not prove the identity or ownership of a device. If different MAC addresses are observed for the same IPv4 address during one scan, Arpticuno reports the MAC as unknown rather than selecting one as authoritative.
+
+## Privileged execution
+
+Raw ARP access may require elevated privileges. Use the virtual environment executable by absolute path, for example:
+
+```bash
+sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24
+```
+
+Do not pass an untrusted or user-modifiable `PATH` into `sudo` when launching Arpticuno.
+
+## Dependency and build security
+
+Runtime and development dependencies are version-pinned and resolved through `uv.lock`. CI uses minimal token permissions, pinned GitHub Action commits, bounded job timeouts, dependency auditing, Bandit, Ruff, mypy, pytest, and CodeQL. Third-party license information is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

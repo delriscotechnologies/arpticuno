@@ -11,8 +11,8 @@ from scapy.error import Scapy_Exception
 from arpticuno import __version__
 from arpticuno.discovery import Host, arp_discover as default_arp_discover
 from arpticuno.discovery import parse_ipv4_targets
-from arpticuno.ports import MAX_TIMEOUT_SECONDS, Probe, probe_connect, scan_ports_threaded
-from arpticuno.reporting import build_payload, render_csv, render_json, render_table
+from arpticuno.ports import MAX_TIMEOUT_SECONDS, PortResult, Probe, probe_connect, scan_ports_threaded
+from arpticuno.reporting import PROBE_STATES, build_payload, render_csv, render_json, render_table
 from arpticuno.ui import BANNER, TOP_ART
 
 DEFAULT_PORTS = tuple(range(1, 7001))
@@ -93,6 +93,14 @@ def _run_command(
     _validate_scan_options(args)
     hosts = arp_discover(args.target, args.iface, args.arp_timeout, args.retries)
     ports = list(ports_provider())
+    probe_summaries = {host.ip: _empty_probe_summary() for host in hosts}
+
+    def record_probe_result(result: PortResult) -> None:
+        summary = probe_summaries.setdefault(result.host, _empty_probe_summary())
+        state = result.state if result.state in PROBE_STATES else "error"
+        summary["total"] += 1
+        summary[state] += 1
+
     results = scan_ports_threaded(
         [host.ip for host in hosts],
         ports,
@@ -101,6 +109,7 @@ def _run_command(
         probe=probe,
         open_only=True,
         progress=(lambda done, total: progress(done, total, False)) if progress is not None else None,
+        result_callback=record_probe_result,
     )
     return build_payload(
         command="scan",
@@ -114,7 +123,12 @@ def _run_command(
         hosts=hosts,
         ports=results,
         started_at=started_at,
+        probe_summaries=probe_summaries,
     )
+
+
+def _empty_probe_summary() -> dict[str, int]:
+    return {"total": 0, **{state: 0 for state in PROBE_STATES}}
 
 
 def _validate_scan_options(args: argparse.Namespace) -> None:

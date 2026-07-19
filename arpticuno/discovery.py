@@ -14,6 +14,7 @@ LOCAL_IPV4_RANGES: tuple[ipaddress.IPv4Network, ...] = (
     ipaddress.IPv4Network("192.168.0.0/16"),
     ipaddress.IPv4Network("169.254.0.0/16"),
 )
+MAC_ADDRESS_PATTERN = re.compile(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,21 @@ class Host:
     ip: str
     mac: str | None = None
     rtt_ms: float | None = None
+
+
+def validate_local_ipv4_host(value: str) -> str:
+    """Return a normalized private/link-local IPv4 host or reject it."""
+    cleaned = value.strip()
+    try:
+        address = ipaddress.ip_address(cleaned)
+    except ValueError as exc:
+        raise ValueError(f"Invalid IPv4 host: {cleaned or value}") from exc
+
+    if not isinstance(address, ipaddress.IPv4Address):
+        raise ValueError("TCP scanning only supports IPv4 hosts")
+    if not any(address in local_range for local_range in LOCAL_IPV4_RANGES):
+        raise ValueError("TCP scanning is limited to private/link-local IPv4 LAN hosts")
+    return str(address)
 
 
 def parse_ipv4_targets(value: str) -> list[ipaddress.IPv4Network]:
@@ -109,12 +125,13 @@ def arp_discover(
     timeout: float = 1.0,
     retries: int = 0,
 ) -> list[Host]:
-    """Find IPv4 hosts on the local LAN that answer an ARP broadcast."""
+    """Record matching IPv4 ARP replies observed on the local LAN."""
     targets = parse_ipv4_targets(target)
 
     from scapy.all import ARP, Ether, srp  # type: ignore
 
     discovered: dict[str, Host] = {}
+    conflicted_ips: set[str] = set()
 
     for network in targets:
         packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(network))
@@ -124,17 +141,28 @@ def arp_discover(
             for request, reply in answered:
                 try:
                     reply_ip = ipaddress.ip_address(str(reply.psrc))
-                except ValueError:
+                except (AttributeError, ValueError):
                     continue
                 if not isinstance(reply_ip, ipaddress.IPv4Address) or reply_ip not in network:
                     continue
 
+                mac = _normalize_mac(getattr(reply, "hwsrc", None))
+                if mac is None:
+                    continue
+
                 ip = str(reply_ip)
-                discovered[ip] = Host(
-                    ip=ip,
-                    mac=str(reply.hwsrc),
-                    rtt_ms=_arp_rtt_ms(request, reply),
-                )
+                rtt_ms = _arp_rtt_ms(request, reply)
+                existing = discovered.get(ip)
+                existing_rtt = existing.rtt_ms if existing is not None else None
+
+                if ip in conflicted_ips:
+                    discovered[ip] = Host(ip=ip, mac=None, rtt_ms=_minimum_rtt(existing_rtt, rtt_ms))
+                elif existing is not None and existing.mac != mac:
+                    conflicted_ips.add(ip)
+                    discovered[ip] = Host(ip=ip, mac=None, rtt_ms=_minimum_rtt(existing_rtt, rtt_ms))
+                else:
+                    discovered[ip] = Host(ip=ip, mac=mac, rtt_ms=_minimum_rtt(existing_rtt, rtt_ms))
+
                 if len(discovered) > MAX_DISCOVERED_HOSTS:
                     raise ValueError(
                         f"ARP discovery returned more than {MAX_DISCOVERED_HOSTS} hosts. "
@@ -142,6 +170,16 @@ def arp_discover(
                     )
 
     return [discovered[ip] for ip in sorted(discovered, key=ipaddress.ip_address)]
+
+
+def _normalize_mac(value: object) -> str | None:
+    text = str(value).strip().lower()
+    return text if MAC_ADDRESS_PATTERN.fullmatch(text) else None
+
+
+def _minimum_rtt(first: float | None, second: float | None) -> float | None:
+    values = [value for value in (first, second) if value is not None]
+    return min(values) if values else None
 
 
 def _arp_rtt_ms(request: object, reply: object) -> float | None:
