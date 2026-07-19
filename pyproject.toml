@@ -7,7 +7,7 @@ name = "arpticuno"
 version = "0.1.0"
 description = "Basic IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
   { name = "Cristian Del Risco" }
