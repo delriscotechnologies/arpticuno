@@ -65,8 +65,25 @@ jobs:
       - name: Run AppSec regression tests
         run: uv run --no-sync pytest -q tests/test_appsec_hardening.py
 
-      - name: Run complete test discovery
-        run: uv run --no-sync pytest -q
+      - name: Capture complete test discovery
+        run: |
+          set +e
+          uv run --no-sync pytest -q > pytest-full.log 2>&1
+          echo "$?" > pytest-status.txt
+          exit 0
+
+      - name: Upload complete-test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: |
+            pytest-full.log
+            pytest-status.txt
+          retention-days: 1
+
+      - name: Enforce complete test discovery
+        run: test "$(cat pytest-status.txt)" -eq 0
 
       - name: Run Ruff
         run: uv run --no-sync ruff check arpticuno tests
