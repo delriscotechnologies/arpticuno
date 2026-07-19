@@ -23,7 +23,7 @@ It has one public command, reports useful findings and probe-health summaries, a
 
 ## Quick Start
 
-Arpticuno supports Python 3.10 through 3.14 and requires direct access to the LAN interface. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
+Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI currently verifies Python 3.10 through 3.14; newer interpreters are not yet part of the compatibility matrix. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
 
 ```bash
 sudo apt update
