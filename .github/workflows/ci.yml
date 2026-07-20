@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -11,35 +13,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  enumerate-tests:
+  test:
     runs-on: ubuntu-latest
-    outputs:
-      files: ${{ steps.list.outputs.files }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      - name: Enumerate test files
-        id: list
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.29"
+
+      - name: Verify uv version
         run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          from pathlib import Path
+          case "$(uv --version)" in
+            "uv 0.11.29"*) ;;
+            *) exit 1 ;;
+          esac
 
-          files = sorted(str(path) for path in Path("tests").glob("test_*.py"))
-          print("files=" + json.dumps(files))
-          PY
+      - name: Install the locked environment
+        run: uv sync --locked --all-extras --python "${{ matrix.python-version }}"
 
-  test-file:
-    needs: enumerate-tests
+      - name: Run complete test discovery
+        run: uv run --no-sync pytest -q
+
+      - name: Run Ruff
+        run: uv run --no-sync ruff check arpticuno tests
+
+      - name: Run mypy
+        run: uv run --no-sync mypy arpticuno
+
+      - name: Run Bandit
+        run: uv run --no-sync bandit -q -r arpticuno
+
+      - name: Run dependency audit
+        run: uv run --no-sync pip-audit --local --skip-editable
+
+  package-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        file: ${{ fromJSON(needs.enumerate-tests.outputs.files) }}
 
     steps:
       - name: Check out repository
@@ -60,5 +85,114 @@ jobs:
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python 3.12
 
-      - name: Run test file
-        run: uv run --no-sync pytest -q "${{ matrix.file }}"
+      - name: Build wheel and source distribution
+        run: uv build --no-sources
+
+      - name: Verify wheel contents and installed CLI
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheels = glob.glob("dist/*.whl")
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = set(archive.namelist())
+              assert "arpticuno/cli.py" in names
+              assert any(name.endswith("entry_points.txt") for name in names)
+          PY
+          python -m pip install --no-deps --target "$RUNNER_TEMP/arpticuno-wheel" dist/*.whl
+          PYTHONPATH="$RUNNER_TEMP/arpticuno-wheel" uv run --no-sync python -m arpticuno.cli --version
+          PYTHONPATH="$RUNNER_TEMP/arpticuno-wheel" uv run --no-sync python -m arpticuno.cli scan --help
+
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.29"
+
+      - name: Install the locked environment
+        run: uv sync --locked --all-extras --python 3.12
+
+      - name: Run portable smoke tests
+        run: >-
+          uv run --no-sync pytest -q
+          tests/test_cli.py
+          tests/test_ports.py
+          tests/test_nmap_ports.py
+          tests/test_reporting.py
+          tests/test_maturity.py
+          tests/test_readme_scope.py
+
+  network-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.29"
+
+      - name: Install the locked environment
+        run: uv sync --locked --all-extras --python 3.12
+
+      - name: Verify ARP discovery and TCP scan in a network namespace
+        run: |
+          set -euo pipefail
+          cleanup() {
+            sudo ip netns pids art-ns 2>/dev/null | xargs -r sudo kill || true
+            sudo ip netns del art-ns 2>/dev/null || true
+            sudo ip link del art-host 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          sudo ip netns add art-ns
+          sudo ip link add art-host type veth peer name art-peer
+          sudo ip link set art-peer netns art-ns
+          sudo ip addr add 192.168.250.1/24 dev art-host
+          sudo ip link set art-host up
+          sudo ip netns exec art-ns ip link set lo up
+          sudo ip netns exec art-ns ip addr add 192.168.250.2/24 dev art-peer
+          sudo ip netns exec art-ns ip link set art-peer up
+          sudo ip netns exec art-ns python3 -m http.server 8080 --bind 192.168.250.2 >/tmp/arpticuno-http.log 2>&1 &
+          sleep 1
+
+          sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.250.2 \
+            --iface art-host --ports 8080 --workers 4 --connect-timeout 0.5 \
+            --format json --output /tmp/arpticuno-integration.json
+          sudo chown "$(id -u):$(id -g)" /tmp/arpticuno-integration.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("/tmp/arpticuno-integration.json").read_text())
+          assert payload["status"] == "completed", payload
+          assert payload["hosts"][0]["ip"] == "192.168.250.2", payload
+          assert payload["hosts"][0]["ports"][0]["port"] == 8080, payload
+          PY
