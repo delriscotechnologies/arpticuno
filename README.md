@@ -16,7 +16,7 @@
 
 ---
 
-Arpticuno deliberately keeps network scanning small and understandable. Give it a private or link-local IPv4 LAN target and it records matching ARP replies, then checks selected TCP ports with normal socket connections.
+Arpticuno deliberately keeps network scanning small and understandable. Give it a private or link-local IPv4 LAN target and it records matching ARP replies, then checks selected TCP ports with normal socket connections. Without `--ports`, it scans the **first 7000 TCP ports**.
 
 It has one public command, reports useful findings and probe-health summaries, and avoids advanced scanning or evasion features.
 
