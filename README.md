@@ -24,7 +24,7 @@ It has one public command, reports useful findings and probe-health summaries, a
 
 ## Quick Start
 
-Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI verifies Python 3.10 through 3.14 on Linux, runs portable smoke tests on Windows, and performs an isolated end-to-end ARP and TCP test with Linux network namespaces.
+Arpticuno officially supports Linux with Python 3.10 or newer and direct access to the LAN interface. CI verifies Python 3.10 through 3.14 on Linux and performs an isolated end-to-end ARP and TCP test with Linux network namespaces. Windows can run the portable CLI, TCP scanning, and reporting components, but actual ARP discovery requires Npcap and is not currently covered by automated integration tests. Windows support is therefore best effort.
 
 On Ubuntu or WSL, install the project:
 
@@ -56,7 +56,7 @@ sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.10,192.168.1.20
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --ports 22,80,443,8000-8100
 ```
 
-Some WSL2 modes do not expose LAN ARP traffic like native Linux. If discovery unexpectedly returns no hosts, use native Linux connected directly to the LAN. Windows requires Npcap for actual ARP discovery; the Windows CI job validates portable CLI and TCP components but does not replace a real Npcap integration test.
+Some WSL2 modes do not expose LAN ARP traffic like native Linux. If discovery unexpectedly returns no hosts, use native Linux connected directly to the LAN.
 
 ## Command Options
 
