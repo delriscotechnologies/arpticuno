@@ -158,4 +158,6 @@ Tags formatted as `v<package-version>` run the complete validation set, enforce 
 
 ## License
 
-Arpticuno source code is available under the [MIT License](LICENSE). Runtime and development dependencies retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Arpticuno source code is available under the [MIT License](LICENSE).
+
+Runtime and development dependencies retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
