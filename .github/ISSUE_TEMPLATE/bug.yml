@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible Arpticuno defect
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private network details, or packet captures containing unrelated traffic.
+  - type: input
+    id: version
+    attributes:
+      label: Arpticuno version
+      placeholder: "0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - Windows with Npcap
+        - WSL
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include expected behavior, actual behavior, and sanitized reproduction steps.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Sanitized command and output
+      render: shell
+  - type: checkboxes
+    id: authorization
+    attributes:
+      label: Authorization
+      options:
+        - label: The reproduction uses systems and networks I own or have explicit permission to test.
+          required: true
