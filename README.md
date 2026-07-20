@@ -127,7 +127,7 @@ A scan has three stages:
 2. Send ARP discovery on the selected local interface and retain only well-formed replies belonging to the requested scope. ARP is unauthenticated and does not prove device identity.
 3. Run bounded TCP connect checks against the selected ports and report open ports plus aggregate outcomes.
 
-The test suite covers validation, malformed and conflicting ARP observations, bounded work submission, TCP probing against a local socket, reporting, CSV safety, CLI behavior, package/version consistency, and output-schema consistency. CI additionally builds and imports the wheel, exercises portable components on Windows, and runs an authorized end-to-end scan inside isolated Linux network namespaces.
+The test suite covers validation, malformed and conflicting ARP observations, bounded work submission, TCP probing against a local socket, reporting, CSV safety, CLI behavior, package/version consistency, and output-schema consistency. CI additionally builds and imports the wheel, exercises portable components on Windows, runs an authorized end-to-end scan inside isolated Linux network namespaces, and enforces at least 80% package line coverage.
 
 ## Scope and Safeguards
 
@@ -154,7 +154,7 @@ See [SECURITY.md](SECURITY.md) for the trust boundary and vulnerability-reportin
 
 Contribution instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). User-visible changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
-Tags formatted as `v<package-version>` run the complete validation set, build wheel and source distributions, generate a CycloneDX SBOM, and create a GitHub Release. The tag must exactly match `arpticuno.__version__`.
+Tags formatted as `v<package-version>` run the complete validation set, enforce the same 80% line-coverage baseline as CI, build wheel and source distributions, generate a CycloneDX SBOM, and create a GitHub Release. The tag must exactly match `arpticuno.__version__`.
 
 ## License
 
