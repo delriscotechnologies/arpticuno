@@ -150,9 +150,9 @@ Arpticuno does not perform SYN or UDP scans, service fingerprinting, operating-s
 
 See [SECURITY.md](SECURITY.md) for the trust boundary and vulnerability-reporting process.
 
-## Development and Releases
+## Releases
 
-Contribution instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). User-visible changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+User-visible changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 Tags formatted as `v<package-version>` run the complete validation set, enforce the same 80% line-coverage baseline as CI, build wheel and source distributions, generate a CycloneDX SBOM, and create a GitHub Release. The tag must exactly match `arpticuno.__version__`.
 
