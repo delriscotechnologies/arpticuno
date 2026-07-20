@@ -11,17 +11,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  diagnostic-tests:
+  enumerate-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.list.outputs.files }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Enumerate test files
+        id: list
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          files = sorted(str(path) for path in Path("tests").glob("test_*.py"))
+          print("files=" + json.dumps(files))
+          PY
+
+  test-file:
+    needs: enumerate-tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        test-files:
-          - "tests/test_discovery.py tests/test_appsec_hardening.py"
-          - "tests/test_discovery.py tests/test_sandbox.py"
-          - "tests/test_appsec_hardening.py tests/test_sandbox.py"
-          - "tests/test_discovery.py tests/test_appsec_hardening.py tests/test_sandbox.py"
+        file: ${{ fromJSON(needs.enumerate-tests.outputs.files) }}
 
     steps:
       - name: Check out repository
@@ -42,11 +60,5 @@ jobs:
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python 3.12
 
-      - name: Run portable and selected Linux tests
-        run: >-
-          uv run --no-sync pytest -q
-          tests/test_cli.py
-          tests/test_ports.py
-          tests/test_reporting.py
-          tests/test_maturity.py
-          ${{ matrix.test-files }}
+      - name: Run test file
+        run: uv run --no-sync pytest -q "${{ matrix.file }}"
