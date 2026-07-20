@@ -1,5 +1,5 @@
 import json
-import tomllib
+import re
 from pathlib import Path
 
 import pytest
@@ -13,8 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_package_and_module_versions_stay_in_sync():
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    assert project["project"]["version"] == arpticuno.__version__
+    project_text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"$', project_text, flags=re.MULTILINE)
+    assert match is not None
+    assert match.group(1) == arpticuno.__version__
 
 
 def test_report_schema_file_matches_runtime_schema_version():
