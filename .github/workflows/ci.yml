@@ -92,8 +92,14 @@ jobs:
       - name: Install the locked environment
         run: uv sync --locked --all-extras --python 3.12
 
-      - name: Run component test
-        run: uv run --no-sync pytest -q "${{ matrix.test-file }}"
+      - name: Run combined component tests
+        run: >-
+          uv run --no-sync pytest -q
+          tests/test_cli.py
+          tests/test_ports.py
+          tests/test_reporting.py
+          tests/test_maturity.py
+          "${{ matrix.test-file }}"
 
   package-smoke:
     runs-on: ubuntu-latest
