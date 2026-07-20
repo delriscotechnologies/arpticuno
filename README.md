@@ -8,14 +8,15 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
-  <a href="#what-you-get">Output</a> ·
+  <a href="#command-options">Options</a> ·
+  <a href="#output-and-automation">Output</a> ·
   <a href="#scope-and-safeguards">Scope</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
 
 ---
 
-Arpticuno deliberately keeps network scanning small and understandable. Give it a local IPv4 target and it records matching ARP replies, then checks the **first 7000 TCP ports** with normal socket connections.
+Arpticuno deliberately keeps network scanning small and understandable. Give it a private or link-local IPv4 LAN target and it records matching ARP replies, then checks selected TCP ports with normal socket connections. Without `--ports`, it scans the **first 7000 TCP ports**.
 
 It has one public command, reports useful findings and probe-health summaries, and avoids advanced scanning or evasion features.
 
@@ -23,12 +24,11 @@ It has one public command, reports useful findings and probe-health summaries, a
 
 ## Quick Start
 
-Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI currently verifies Python 3.10 through 3.14; newer interpreters are not yet part of the compatibility matrix. Linux is the documented installation path below; Windows can also run Scapy with Npcap installed. On Ubuntu or WSL, install the base tools and the project:
+Arpticuno requires Python 3.10 or newer and direct access to the LAN interface. CI verifies Python 3.10 through 3.14 on Linux, runs portable smoke tests on Windows, and performs an isolated end-to-end ARP and TCP test with Linux network namespaces.
+
+On Ubuntu or WSL, install the project:
 
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip
-
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
 python3 -m venv .venv
@@ -36,85 +36,82 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
-This end-user installation path uses the constraints in `pyproject.toml`; it does not read `uv.lock`. Scapy is pinned exactly, while `pip` resolves a compatible build backend in an isolated build environment. To reproduce the repository's locked CI and development environment instead, use the required `uv` 0.11.29 and run `uv sync --locked --all-extras` from the checkout.
+The end-user installation path uses `pyproject.toml`; it does not read `uv.lock`. The runtime Scapy dependency is pinned exactly. To reproduce the repository's locked CI and development environment, install `uv` 0.11.29 and run:
 
-The public command shape is `arpticuno scan <target>`. Run it with the virtual environment executable by absolute path to avoid passing a user-controlled `PATH` into a privileged process:
+```bash
+uv sync --locked --all-extras
+```
+
+Raw ARP access may require elevated privileges. Use the virtual-environment executable by absolute path rather than passing a user-controlled `PATH` into `sudo`:
 
 ```bash
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24
 ```
 
-The target can be a CIDR range, one IPv4 address, or a comma-separated mix:
+The default TCP selection remains ports `1-7000`. A single host, CIDR, or comma-separated target list is accepted:
 
 ```bash
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.10
 sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.10,192.168.1.20
-sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --format json
-sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --format csv
+sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --ports 22,80,443,8000-8100
 ```
 
-Some WSL2 network modes do not expose LAN ARP traffic in the same way as native Linux. If discovery returns no hosts unexpectedly, run Arpticuno from native Ubuntu or another Linux host connected directly to that LAN.
+Some WSL2 modes do not expose LAN ARP traffic like native Linux. If discovery unexpectedly returns no hosts, use native Linux connected directly to the LAN. Windows requires Npcap for actual ARP discovery; the Windows CI job validates portable CLI and TCP components but does not replace a real Npcap integration test.
 
-## What You Get
-
-The default report answers three questions after a basic LAN scan: which hosts sent matching ARP replies, which TCP ports were open, and whether timeouts or connection errors make a negative result inconclusive. Closed ports do not flood the terminal.
-
-The example below is generated from the repository's synthetic sandbox data. It demonstrates the exact output format without claiming that these hosts came from a real LAN.
+## Command Options
 
 ```text
-      db                           mm     db
-     ;MM:                          MM
-    ,V^MM.    `7Mb,od8 `7MMpdMAo.mmMMmm `7MM  ,p6"bo `7MM  `7MM  `7MMpMMMb.  ,pW"Wq.
-   ,M  `MM      MM' "'   MM   `Wb  MM     MM 6M'  OO   MM    MM    MM    MM 6W'   `Wb
-   AbmmmqMA     MM       MM    M8  MM     MM 8M        MM    MM    MM    MM 8M     M8
-  A'     VML    MM       MM   ,AP  MM     MM YM.    ,  MM    MM    MM    MM YA.   ,A9
-.AMA.   .AMMA..JMML.     MMbmmd'   `Mbmo.JMML.YMbmd'   `Mbod"YML..JMML  JMML.`Ybmd9'
-                         MM
-                       .JMML.
-
-                             ╔══════════════════════════╗
-                             ║  Del Risco Technologies  ║
-                             ╚══════════════════════════╝
-
-Results:  Target(s): 192.168.1.0/24  │  Total ARP responders: 3  │  Total TCP probes: 21000  │  Total open TCP ports: 5
-
-ARP responders:
-  Host 1
-    IPv4: 192.168.1.1
-    MAC: aa:bb:cc:dd:ee:01
-    ARP RTT: 1.2 ms
-    TCP Probes: 7000
-    Open TCP Ports: 2
-      Port: 53/tcp | State: open | Latency: 0.8 ms
-      Port: 80/tcp | State: open | Latency: 0.9 ms
-
-  Host 2
-    IPv4: 192.168.1.10
-    MAC: aa:bb:cc:dd:ee:10
-    ARP RTT: 2.7 ms
-    TCP Probes: 7000
-    Open TCP Ports: 2
-      Port: 22/tcp | State: open | Latency: 1.4 ms
-      Port: 443/tcp | State: open | Latency: 1.8 ms
-
-  Host 3
-    IPv4: 192.168.1.25
-    MAC: aa:bb:cc:dd:ee:25
-    ARP RTT: 3.4 ms
-    TCP Probes: 7000
-    Open TCP Ports: 1
-      Port: 3389/tcp | State: open | Latency: 2.1 ms
+arpticuno scan <target>
+  --iface <name>             ARP interface, such as eth0
+  --arp-timeout <seconds>    ARP timeout, greater than 0 and at most 10
+  --retries <count>          Additional ARP attempts, 0-5
+  --ports <selection>        TCP ports and ranges; default 1-7000
+  --connect-timeout <sec>    TCP connect timeout; default 0.2
+  --workers <count>          TCP worker count, 1-512; default 256
+  --format table|json|csv    Output format
+  --output <path>            Write the report to a file
+  --no-banner                Suppress terminal branding
+  --fail-on-inconclusive     Return exit code 3 when every TCP probe fails
 ```
 
-Choose the same findings in the format that fits the next step:
+Examples:
+
+```bash
+sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --ports 22,80,443
+sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --workers 64 --connect-timeout 0.5
+sudo "$(pwd)/.venv/bin/arpticuno" scan 192.168.1.0/24 --format json --output scan.json --no-banner
+```
+
+## Output and Automation
+
+The table report answers which hosts sent matching ARP replies, which selected TCP ports were open, and whether timeouts or connection errors make a negative result inconclusive. Closed ports do not flood the terminal.
 
 | Format | Best for |
 | --- | --- |
-| `table` | Reading results and probe warnings in the terminal |
+| `table` | Reading findings and probe warnings in the terminal |
 | `json` | Scripts and structured tooling |
-| `csv` | Spreadsheets, pipelines, and SIEM ingestion; even zero-host scans contain an auditable summary row |
+| `csv` | Spreadsheets, pipelines, and SIEM ingestion |
 
-Every CSV text cell that could be interpreted as a spreadsheet formula is neutralized before output, including values with leading whitespace or control characters.
+JSON and CSV reports expose `schema_version: 1.0`. The machine-readable contract is documented in [`schemas/arpticuno-report.schema.json`](schemas/arpticuno-report.schema.json). CSV text cells that could be interpreted as spreadsheet formulas are neutralized, including values with leading whitespace or control characters.
+
+Top-level report statuses are:
+
+| Status | Meaning |
+| --- | --- |
+| `completed` | At least one open port and no failed probes |
+| `partial` | Some probes failed, but the scan produced conclusive results |
+| `inconclusive` | Every TCP probe timed out, was unreachable, or failed |
+| `no-open-ports` | All selected probes completed without an open port |
+| `no-arp-responders` | No matching ARP reply was observed |
+
+Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Command completed |
+| `1` | Runtime, OS, privilege, Scapy, or output-file error |
+| `2` | Invalid target or option |
+| `3` | Inconclusive TCP result when `--fail-on-inconclusive` is enabled |
 
 Preview the complete terminal experience with synthetic data and no network traffic:
 
@@ -126,32 +123,38 @@ python -m arpticuno.sandbox
 
 A scan has three stages:
 
-1. Validate that every requested target is a private or link-local IPv4 address. Duplicate and overlapping entries are collapsed before any packets are sent.
-2. Send ARP discovery on the local LAN and retain well-formed replies that belong to the requested target. ARP is unauthenticated and does not prove device identity.
-3. Run bounded TCP connect checks against ports `1-7000` on each discovered host and report open ports plus aggregate outcomes.
+1. Validate every target as private or link-local IPv4 and collapse duplicate or overlapping entries.
+2. Send ARP discovery on the selected local interface and retain only well-formed replies belonging to the requested scope. ARP is unauthenticated and does not prove device identity.
+3. Run bounded TCP connect checks against the selected ports and report open ports plus aggregate outcomes.
 
-Automated checks use pytest's complete test discovery and cover target validation, malformed and conflicting ARP observations, TCP probing against a local test socket, bounded scan behavior, reporting, CSV safety, and safety limits. They do not reproduce a physical LAN end to end, so discovery should be verified on an authorized test segment before the results are relied upon.
+The test suite covers validation, malformed and conflicting ARP observations, bounded work submission, TCP probing against a local socket, reporting, CSV safety, CLI behavior, package/version consistency, and output-schema consistency. CI additionally builds and imports the wheel, exercises portable components on Windows, and runs an authorized end-to-end scan inside isolated Linux network namespaces.
 
 ## Scope and Safeguards
 
 Arpticuno is intentionally limited:
 
 - IPv4 and local ARP discovery only
-- private or link-local target ranges only in the CLI and batch scan APIs
+- private or link-local targets only in the CLI and batch scan APIs
 - TCP connect scanning only
-- at most 256 raw target-list entries, 65,536 unique target addresses, and 512 total ARP request rounds
-- up to 256 ARP responders, with a separate 1,000,000-probe limit; at the default 7,000-port range, TCP scanning is limited to 142 hosts
-- bounded target size, timeouts, retries, worker counts, and queued TCP tasks
-- duplicate and overlapping ARP targets are collapsed before scanning
-- out-of-scope and malformed ARP replies are discarded
-- conflicting MAC addresses observed for one IPv4 address are reported as `unknown`
-- timeouts, unreachable results, and errors are retained as summaries so an inconclusive scan is not presented as a clean negative
+- at most 256 raw target entries, 65,536 unique target addresses, and 512 total ARP request rounds
+- up to 256 ARP responders and 1,000,000 total TCP probes
+- bounded timeouts, retries, worker counts, and queued tasks
+- malformed and out-of-scope ARP replies are discarded
+- conflicting MAC addresses for one IPv4 address are reported as `unknown`
+- timeout, unreachable, and error counts remain visible so inconclusive scans are not reported as clean negatives
+- strict integer validation for ports and worker counts
 
 `probe_connect()` is a low-level single-socket helper and does not enforce authorization or local-network scope. The public CLI, `arp_discover()`, `scan_tcp_ports()`, and `scan_ports_threaded()` enforce their documented safety limits.
 
-It does not perform SYN or UDP scans, service fingerprinting, operating-system detection, banner grabbing, spoofing, evasion, or internet-wide scanning.
+Arpticuno does not perform SYN or UDP scans, service fingerprinting, operating-system detection, banner grabbing, spoofing, evasion, exploitation, or internet-wide scanning.
 
-See [SECURITY.md](SECURITY.md) for reporting and handling guidance.
+See [SECURITY.md](SECURITY.md) for the trust boundary and vulnerability-reporting process.
+
+## Development and Releases
+
+Contribution instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). User-visible changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
+Tags formatted as `v<package-version>` run the complete validation set, build wheel and source distributions, generate a CycloneDX SBOM, and create a GitHub Release. The tag must exactly match `arpticuno.__version__`.
 
 ## License
 

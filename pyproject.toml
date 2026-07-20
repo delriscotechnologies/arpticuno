@@ -5,12 +5,30 @@ build-backend = "hatchling.build"
 [project]
 name = "arpticuno"
 version = "0.1.0"
-description = "Basic IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
+description = "Focused IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "Cristian Del Risco" }
+]
+keywords = ["arp", "lan", "network-scanner", "security", "tcp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security",
+  "Topic :: System :: Networking",
 ]
 dependencies = [
   "scapy==2.7.0"
@@ -19,14 +37,24 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest==9.1.1",
-  "ruff==0.15.22",
+  "ruff==0.15.21",
   "mypy==2.3.0",
   "bandit==1.9.4",
   "pip-audit==2.10.1"
 ]
 
+[project.urls]
+Homepage = "https://github.com/delriscotechnologies/arpticuno"
+Repository = "https://github.com/delriscotechnologies/arpticuno"
+Issues = "https://github.com/delriscotechnologies/arpticuno/issues"
+Changelog = "https://github.com/delriscotechnologies/arpticuno/blob/main/CHANGELOG.md"
+Security = "https://github.com/delriscotechnologies/arpticuno/security/policy"
+
 [project.scripts]
 arpticuno = "arpticuno.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["arpticuno"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

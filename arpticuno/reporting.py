@@ -12,8 +12,8 @@ from arpticuno import __version__
 from arpticuno.discovery import Host
 from arpticuno.ports import PortResult
 
-
 Payload = dict[str, Any]
+SCHEMA_VERSION = "1.0"
 PROBE_STATES = ("open", "closed", "timeout", "unreachable", "error")
 FORMULA_PREFIXES = ("=", "+", "-", "@")
 
@@ -27,13 +27,23 @@ def build_payload(
     started_at: str | None = None,
     probe_summaries: dict[str, dict[str, int]] | None = None,
 ) -> Payload:
-    """Build the Arpticuno JSON/CSV/table data model."""
+    """Build the stable Arpticuno report data model."""
     ports_by_host: dict[str, list[PortResult]] = {}
     for result in ports:
         ports_by_host.setdefault(result.host, []).append(result)
 
     finished_at = datetime.now(timezone.utc).isoformat()
-    return {
+    host_payloads = [
+        _host_to_dict(
+            host,
+            ports_by_host.get(host.ip, []),
+            probe_summaries is not None,
+            None if probe_summaries is None else probe_summaries.get(host.ip),
+        )
+        for host in hosts
+    ]
+    payload: Payload = {
+        "schema_version": SCHEMA_VERSION,
         "tool": "Arpticuno",
         "version": __version__,
         "scan_id": str(uuid4()),
@@ -41,16 +51,10 @@ def build_payload(
         "started_at": started_at or finished_at,
         "finished_at": finished_at,
         "inputs": inputs,
-        "hosts": [
-            _host_to_dict(
-                host,
-                ports_by_host.get(host.ip, []),
-                probe_summaries is not None,
-                None if probe_summaries is None else probe_summaries.get(host.ip),
-            )
-            for host in hosts
-        ],
+        "hosts": host_payloads,
     }
+    payload["status"] = scan_status(payload)
+    return payload
 
 
 def _host_to_dict(
@@ -85,7 +89,6 @@ def _normalize_probe_summary(
 ) -> dict[str, int]:
     counts: dict[str, int] = {state: 0 for state in PROBE_STATES}
     supplied_total = 0
-
     if supplied_summary is None:
         for result in ports:
             state = result.state if result.state in counts else "error"
@@ -111,6 +114,35 @@ def _summary_for_host(host: dict[str, Any]) -> dict[str, int]:
     return {"total": sum(counts.values()), **counts}
 
 
+def scan_status(payload: Payload) -> str:
+    hosts = payload.get("hosts", [])
+    if not hosts:
+        return "no-arp-responders"
+
+    any_open = False
+    any_failure = False
+    all_failed = True
+    for host in hosts:
+        summary = _summary_for_host(host)
+        failures = sum(summary.get(state, 0) for state in ("timeout", "unreachable", "error"))
+        total = summary.get("total", 0)
+        any_open = any_open or summary.get("open", 0) > 0
+        any_failure = any_failure or failures > 0
+        all_failed = all_failed and total > 0 and failures == total
+
+    if all_failed:
+        return "inconclusive"
+    if any_failure:
+        return "partial"
+    if any_open:
+        return "completed"
+    return "no-open-ports"
+
+
+def is_inconclusive(payload: Payload) -> bool:
+    return scan_status(payload) == "inconclusive"
+
+
 def render_json(payload: Payload) -> str:
     return json.dumps(payload, indent=2, allow_nan=False)
 
@@ -122,15 +154,13 @@ def render_table(payload: Payload) -> str:
         1 for host in hosts for port in host.get("ports", []) if port.get("state") == "open"
     )
     total_probes = sum(_summary_for_host(host).get("total", 0) for host in hosts)
-
     summary = (
         f"Results:  Target(s): {target or '-'}  │  "
         f"Total ARP responders: {len(hosts)}  │  "
         f"Total TCP probes: {total_probes}  │  "
         f"Total open TCP ports: {open_port_count}"
     )
-    lines = [summary, "", "ARP responders:"]
-
+    lines = [summary, f"Status: {scan_status(payload)}", "", "ARP responders:"]
     if not hosts:
         lines.append("  No ARP responders found.")
         return "\n".join(lines) + "\n"
@@ -138,9 +168,10 @@ def render_table(payload: Payload) -> str:
     for index, host in enumerate(hosts, start=1):
         open_ports = [port for port in host.get("ports", []) if port.get("state") == "open"]
         probe_summary = _summary_for_host(host)
-        failed_probes = sum(probe_summary.get(state, 0) for state in ("timeout", "unreachable", "error"))
+        failed_probes = sum(
+            probe_summary.get(state, 0) for state in ("timeout", "unreachable", "error")
+        )
         total_host_probes = probe_summary.get("total", 0)
-
         lines.extend(
             [
                 f"  Host {index}",
@@ -151,26 +182,23 @@ def render_table(payload: Payload) -> str:
                 f"    Open TCP Ports: {len(open_ports)}",
             ]
         )
-
         if failed_probes:
             lines.append(
                 f"    Probe Warning: {failed_probes} probes timed out, were unreachable, or failed."
             )
-
         if open_ports:
             for port in open_ports:
                 latency = _display(port.get("latency_ms"), empty="-")
                 lines.append(
-                    f"      Port: {port['port']}/{port['proto']} | State: {port['state']} | Latency: {latency} ms"
+                    f"      Port: {port['port']}/{port['proto']} | "
+                    f"State: {port['state']} | Latency: {latency} ms"
                 )
         elif total_host_probes and failed_probes == total_host_probes:
             lines.append("      No conclusive TCP port result was obtained for this host.")
         else:
             lines.append("      No open TCP ports found on this host.")
-
         if index != len(hosts):
             lines.append("")
-
     return "\n".join(lines) + "\n"
 
 
@@ -198,6 +226,7 @@ def render_csv(payload: Payload) -> str:
         "timeout_count",
         "unreachable_count",
         "error_count",
+        "schema_version",
     ]
     writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\n")
     writer.writeheader()
@@ -214,23 +243,28 @@ def render_csv(payload: Payload) -> str:
             continue
         for port in host["ports"]:
             writer.writerow(_sanitize_csv_row(_row(payload, target, host, port)))
-
     return buffer.getvalue()
 
 
 def _scan_row(payload: Payload, target: str) -> dict[str, Any]:
     return {
+        "schema_version": payload.get("schema_version", SCHEMA_VERSION),
         "scan_id": payload["scan_id"],
         "command": payload["command"],
         "target": target,
         "started_at": payload.get("started_at", ""),
         "finished_at": payload.get("finished_at", ""),
         "record_type": "scan",
-        "status": "no-arp-responders",
+        "status": scan_status(payload),
     }
 
 
-def _row(payload: Payload, target: str, host: dict[str, Any], port: dict[str, Any] | None) -> dict[str, Any]:
+def _row(
+    payload: Payload,
+    target: str,
+    host: dict[str, Any],
+    port: dict[str, Any] | None,
+) -> dict[str, Any]:
     summary = _summary_for_host(host)
     failed = sum(summary.get(state, 0) for state in ("timeout", "unreachable", "error"))
     total = summary.get("total", 0)
@@ -246,6 +280,7 @@ def _row(payload: Payload, target: str, host: dict[str, Any], port: dict[str, An
         status = "not-scanned"
 
     return {
+        "schema_version": payload.get("schema_version", SCHEMA_VERSION),
         "scan_id": payload["scan_id"],
         "command": payload["command"],
         "target": target,
@@ -298,6 +333,10 @@ def _display(value: Any, empty: str = "-") -> str:
 
 
 # Backwards-compatible helper for older callers/tests.
-def build_report(target: str, hosts: list[Host], results_by_host: dict[str, list[PortResult]]) -> Payload:
+def build_report(
+    target: str,
+    hosts: list[Host],
+    results_by_host: dict[str, list[PortResult]],
+) -> Payload:
     ports = [result for results in results_by_host.values() for result in results]
     return build_payload(command="scan", inputs={"target": target}, hosts=hosts, ports=ports)
