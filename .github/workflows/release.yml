@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -41,10 +41,18 @@ jobs:
       - name: Validate release
         run: |
           uv run --no-sync pytest -q
-          uv run --no-sync ruff check arpticuno tests
-          uv run --no-sync mypy arpticuno
-          uv run --no-sync bandit -q -r arpticuno
+          uv run --no-sync ruff check arpticuno tests tools
+          uv run --no-sync mypy arpticuno tools
+          uv run --no-sync bandit -q -r arpticuno tools
           uv run --no-sync pip-audit --local --skip-editable
+
+      - name: Enforce minimum line coverage
+        run: |
+          uv run --no-sync python -m trace \
+            --count --missing --coverdir .tracecov \
+            --ignore-dir "$(pwd)/.venv" \
+            --module pytest -q
+          uv run --no-sync python tools/check_coverage.py .tracecov arpticuno 80
 
       - name: Build distributions and SBOM
         run: |

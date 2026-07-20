@@ -14,12 +14,19 @@ Run the complete validation set before submitting changes:
 
 ```bash
 uv run --no-sync pytest -q
-uv run --no-sync ruff check arpticuno tests
-uv run --no-sync mypy arpticuno
-uv run --no-sync bandit -q -r arpticuno
+uv run --no-sync ruff check arpticuno tests tools
+uv run --no-sync mypy arpticuno tools
+uv run --no-sync bandit -q -r arpticuno tools
 uv run --no-sync pip-audit --local --skip-editable
+uv run --no-sync python -m trace \
+  --count --missing --coverdir .tracecov \
+  --ignore-dir "$(pwd)/.venv" \
+  --module pytest -q
+uv run --no-sync python tools/check_coverage.py .tracecov arpticuno 80
 uv build --no-sources
 ```
+
+CI and releases require at least 80% line coverage for the `arpticuno` package. The gate uses Python's standard-library tracer and does not add another dependency to the locked environment.
 
 ## Scope expectations
 

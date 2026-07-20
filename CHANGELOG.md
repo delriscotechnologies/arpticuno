@@ -10,6 +10,7 @@ All notable changes to Arpticuno are documented here. The project follows semant
 - Versioned JSON/CSV report schema with a published JSON Schema.
 - Wheel and source-distribution smoke tests, Windows smoke tests, and a Linux network-namespace integration test.
 - Tag-driven GitHub Release workflow with release artifacts and a CycloneDX SBOM.
+- Dependency-free 80% package line-coverage gates in CI and release validation.
 - Contribution guidance, issue templates, pull-request template, and code of conduct.
 
 ### Changed
