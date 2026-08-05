@@ -43,5 +43,3 @@ CI installs `uv` through the official `astral-sh/setup-uv` action, pins both the
 CI uses minimal token permissions, pinned GitHub Action commits, bounded job timeouts, complete pytest discovery, Ruff, mypy, Bandit, dependency auditing, CodeQL, wheel-content checks, Windows smoke tests, and an isolated Linux network-namespace integration test.
 
 Release tags must match the package version. The release workflow reruns validation, builds wheel and source distributions, generates a CycloneDX SBOM, and publishes only through GitHub's tag-scoped workflow token.
-
-Third-party license information is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
