@@ -100,20 +100,6 @@ def parse_ipv4_targets(value: str) -> list[ipaddress.IPv4Network]:
     return networks
 
 
-def validate_ipv4_cidr(value: str) -> ipaddress.IPv4Network:
-    """Backwards-compatible strict CIDR validator used by older callers/tests."""
-    network = _parse_single_ipv4_target(value)
-    if network.prefixlen == 32 and "/" not in value:
-        raise ValueError(
-            "Target must be an IPv4 CIDR network like 192.168.1.0/24. This validator does not accept plain IPs, hostnames, or commands."
-        )
-    if "/" not in value:
-        raise ValueError(
-            "Target must be an IPv4 CIDR network like 192.168.1.0/24. This validator does not accept plain IPs, hostnames, or commands."
-        )
-    return network
-
-
 def _parse_single_ipv4_target(value: str) -> ipaddress.IPv4Network:
     cleaned = value.strip()
     if not cleaned:
@@ -136,17 +122,6 @@ def _parse_single_ipv4_target(value: str) -> ipaddress.IPv4Network:
     if network.num_addresses > MAX_ARP_TARGETS:
         raise ValueError("CIDR is too large for safe LAN ARP discovery. Use /16 or narrower.")
     return network
-
-
-def is_network(value: str) -> bool:
-    """Return True only when the input looks like CIDR/network input."""
-    if "/" not in value:
-        return False
-    try:
-        ipaddress.ip_network(value, strict=False)
-    except ValueError:
-        return False
-    return True
 
 
 def arp_discover(

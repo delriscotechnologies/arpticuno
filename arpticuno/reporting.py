@@ -330,13 +330,3 @@ def _csv_safe(value: Any) -> Any:
 
 def _display(value: Any, empty: str = "-") -> str:
     return empty if value is None else str(value)
-
-
-# Backwards-compatible helper for older callers/tests.
-def build_report(
-    target: str,
-    hosts: list[Host],
-    results_by_host: dict[str, list[PortResult]],
-) -> Payload:
-    ports = [result for results in results_by_host.values() for result in results]
-    return build_payload(command="scan", inputs={"target": target}, hosts=hosts, ports=ports)

@@ -45,7 +45,9 @@ def test_open_only_scan_keeps_all_probe_outcomes_for_reporting():
     assert sorted(result.state for result in observed) == ["open", "timeout"]
 
 
-def test_cli_reports_probe_failures_instead_of_clean_negative(capsys):
+def test_cli_reports_probe_failures_instead_of_clean_negative(capsys, monkeypatch):
+    monkeypatch.setattr("arpticuno.cli.DEFAULT_PORTS", (22, 80))
+
     def fake_discover(target, iface=None, timeout=1.0, retries=0):
         return [Host(ip="192.168.1.10", mac="aa:bb:cc:dd:ee:ff")]
 
@@ -56,7 +58,6 @@ def test_cli_reports_probe_failures_instead_of_clean_negative(capsys):
         ["scan", "192.168.1.10", "--format", "json"],
         arp_discover=fake_discover,
         probe=fake_probe,
-        ports_provider=lambda: [22, 80],
     )
     payload = json.loads(capsys.readouterr().out)
 
