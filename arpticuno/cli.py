@@ -20,7 +20,6 @@ DEFAULT_WORKERS = 256
 INCONCLUSIVE_EXIT_CODE = 3
 AUTH_NOTICE = "Use only on systems and networks you own or have explicit permission to test."
 ArpDiscover = Callable[[str, str | None, float, int], list[Host]]
-PortProvider = Callable[[], Sequence[int]]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,7 +64,6 @@ def main(
     *,
     arp_discover: ArpDiscover = default_arp_discover,
     probe: Probe = probe_connect,
-    ports_provider: PortProvider = lambda: DEFAULT_PORTS,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
@@ -81,7 +79,6 @@ def main(
             args,
             arp_discover=arp_discover,
             probe=probe,
-            ports_provider=ports_provider,
             progress=progress,
         )
         if progress is not None:
@@ -107,15 +104,12 @@ def _run_command(
     *,
     arp_discover: ArpDiscover,
     probe: Probe,
-    ports_provider: PortProvider,
     progress: Callable[[int | None, int | None, bool], None] | None = None,
 ) -> dict:
-    if args.command != "scan":
-        raise ValueError(f"Unknown command: {args.command}")
     started_at = datetime.now(timezone.utc).isoformat()
     targets = parse_ipv4_targets(args.target)
     validate_arp_options(args.arp_timeout, args.retries, len(targets))
-    ports = parse_ports(args.ports) if args.ports is not None else list(ports_provider())
+    ports = parse_ports(args.ports) if args.ports is not None else DEFAULT_PORTS
     connect_timeout = args.connect_timeout if args.connect_timeout is not None else DEFAULT_CONNECT_TIMEOUT
     workers = args.workers if args.workers is not None else DEFAULT_WORKERS
     # Validate TCP controls before any raw-packet operation begins.
@@ -211,7 +205,7 @@ def _make_progress_reporter(
             print(file=stream)
             return
         if not total:
-            line = f"[{' ' * width}]".replace(" ", ".")
+            line = f"[{'.' * width}]"
             print(f"\r{_center_line(line)}", end="", file=stream, flush=True)
             return
         percent = min(max(done or 0, 0) / total, 1.0)
