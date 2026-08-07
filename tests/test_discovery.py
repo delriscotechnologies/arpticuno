@@ -10,10 +10,8 @@ from arpticuno.discovery import (
     MAX_ARP_TARGET_ENTRIES,
     Host,
     arp_discover,
-    is_network,
     parse_ipv4_targets,
     validate_arp_options,
-    validate_ipv4_cidr,
 )
 
 
@@ -23,11 +21,6 @@ def test_host_model_keeps_optional_arp_latency():
     assert host.ip == "192.168.1.10"
     assert host.mac == "aa:bb:cc:dd:ee:ff"
     assert host.rtt_ms == 2.4
-
-
-def test_is_network_only_true_for_cidr_input():
-    assert is_network("192.168.1.0/24") is True
-    assert is_network("192.168.1.10") is False
 
 
 def test_parse_ipv4_targets_accepts_single_host_and_multiple_targets():
@@ -45,22 +38,6 @@ def test_parse_ipv4_targets_collapses_duplicate_and_overlapping_targets():
     )
 
     assert [str(item) for item in targets] == ["192.168.1.0/24"]
-
-
-def test_validate_ipv4_cidr_rejects_non_ipv4_and_host_bits():
-    with pytest.raises(ValueError):
-        validate_ipv4_cidr("2001:db8::/64")
-    with pytest.raises(ValueError):
-        validate_ipv4_cidr("192.168.1.20/24")
-    with pytest.raises(ValueError):
-        validate_ipv4_cidr("8.8.8.0/24")
-    with pytest.raises(ValueError):
-        validate_ipv4_cidr("10.0.0.0/15")
-    with pytest.raises(ValueError):
-        validate_ipv4_cidr("192.168.1.10")
-
-    assert str(validate_ipv4_cidr("192.168.1.0/24")) == "192.168.1.0/24"
-    assert str(validate_ipv4_cidr("10.0.0.0/16")) == "10.0.0.0/16"
 
 
 def test_parse_ipv4_targets_rejects_command_like_input():
