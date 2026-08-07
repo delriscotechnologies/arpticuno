@@ -10,7 +10,6 @@ from typing import Callable, Sequence
 
 from arpticuno.discovery import validate_local_ipv4_host
 
-ALL_TCP_PORTS = tuple(range(1, 65536))
 MAX_WORKERS = 512
 MAX_TIMEOUT_SECONDS = 10.0
 MAX_PORTS_PER_HOST = 65_535
@@ -254,6 +253,3 @@ def scan_ports_threaded(
             )
         )
     return results
-
-
-scan_tcp_port = probe_connect
