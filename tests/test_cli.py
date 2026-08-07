@@ -28,12 +28,12 @@ def test_parser_exposes_scan_and_operational_options():
         assert option in scan_help
 
 
-def test_default_scan_preserves_documented_defaults(capsys):
+def test_default_scan_preserves_documented_defaults(capsys, monkeypatch):
+    monkeypatch.setattr(cli, "DEFAULT_PORTS", (22,))
     code = main(
         ["scan", "192.168.1.10", "--format", "json"],
         arp_discover=lambda *args: _host(),
         probe=lambda host, port, timeout: PortResult(host=host, port=port, state="open"),
-        ports_provider=lambda: [22],
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 0
