@@ -28,4 +28,4 @@ Raw ARP access may require elevated privileges. When elevated execution is neces
 
 ## Dependencies
 
-The runtime Scapy dependency is pinned exactly in `pyproject.toml`. The repository also includes `uv.lock` for the locked development dependency set. End-user installation with `pip install .` uses `pyproject.toml`.
+The runtime Scapy dependency is pinned exactly in `pyproject.toml`. End-user installation with `pip install .` uses that project configuration directly.
