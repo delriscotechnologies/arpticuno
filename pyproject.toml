@@ -13,23 +13,6 @@ license-files = ["LICENSE"]
 authors = [
   { name = "Cristian Del Risco" }
 ]
-keywords = ["arp", "lan", "network-scanner", "security", "tcp"]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Environment :: Console",
-  "Intended Audience :: Information Technology",
-  "Intended Audience :: System Administrators",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: POSIX :: Linux",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
-  "Topic :: Security",
-  "Topic :: System :: Networking",
-]
 dependencies = [
   "scapy==2.7.0"
 ]
@@ -47,21 +30,9 @@ dev = [
 Homepage = "https://github.com/delriscotechnologies/arpticuno"
 Repository = "https://github.com/delriscotechnologies/arpticuno"
 Issues = "https://github.com/delriscotechnologies/arpticuno/issues"
-Changelog = "https://github.com/delriscotechnologies/arpticuno/blob/main/CHANGELOG.md"
-Security = "https://github.com/delriscotechnologies/arpticuno/security/policy"
 
 [project.scripts]
 arpticuno = "arpticuno.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["arpticuno"]
-
-[tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests"]
-
-[tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
-
-[tool.uv]
-required-version = "==0.11.29"
