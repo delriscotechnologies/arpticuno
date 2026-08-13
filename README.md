@@ -91,7 +91,6 @@ See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 - `assets/` — project logo
 - `schemas/` — JSON report schema
 - `pyproject.toml` — package and dependency configuration
-- `uv.lock` — locked development dependency set
 
 ## License
 
