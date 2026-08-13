@@ -57,7 +57,7 @@ Supported formats:
 - `json` — structured output
 - `csv` — spreadsheet, pipeline, or SIEM-friendly output
 
-JSON reports use `schema_version: 1.0`. The report structure is documented in [`schemas/arpticuno-report.schema.json`](schemas/arpticuno-report.schema.json).
+JSON reports use `schema_version: 1.0`.
 
 Probe failures remain visible in the summaries so timeouts or unreachable destinations are not reported as confirmed closed ports.
 
@@ -89,7 +89,6 @@ See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 
 - `arpticuno/` — application code
 - `assets/` — project logo
-- `schemas/` — JSON report schema
 - `pyproject.toml` — package and dependency configuration
 
 ## License
