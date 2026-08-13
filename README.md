@@ -77,6 +77,54 @@ A synthetic preview is included and does not send network traffic:
 python -m arpticuno.sandbox
 ```
 
+Example table output:
+
+```text
+      db                           mm     db
+     ;MM:                          MM
+    ,V^MM.    `7Mb,od8 `7MMpdMAo.mmMMmm `7MM  ,p6"bo `7MM  `7MM  `7MMpMMMb.  ,pW"Wq.
+   ,M  `MM      MM' "'   MM   `Wb  MM     MM 6M'  OO   MM    MM    MM    MM 6W'   `Wb
+   AbmmmqMA     MM       MM    M8  MM     MM 8M        MM    MM    MM    MM 8M     M8
+  A'     VML    MM       MM   ,AP  MM     MM YM.    ,  MM    MM    MM    MM YA.   ,A9
+.AMA.   .AMMA..JMML.     MMbmmd'   `Mbmo.JMML.YMbmd'   `Mbod"YML..JMML  JMML.`Ybmd9'
+                         MM
+                       .JMML.
+
+                             ╔══════════════════════════╗
+                             ║  Del Risco Technologies  ║
+                             ╚══════════════════════════╝
+
+Results:  Target(s): 192.168.1.0/24  │  Total ARP responders: 3  │  Total TCP probes: 21000  │  Total open TCP ports: 5
+Status: completed
+
+ARP responders:
+  Host 1
+    IPv4: 192.168.1.1
+    MAC: aa:bb:cc:dd:ee:01
+    ARP RTT: 1.2 ms
+    TCP Probes: 7000
+    Open TCP Ports: 2
+      Port: 53/tcp | State: open | Latency: 0.8 ms
+      Port: 80/tcp | State: open | Latency: 0.9 ms
+
+  Host 2
+    IPv4: 192.168.1.10
+    MAC: aa:bb:cc:dd:ee:10
+    ARP RTT: 2.7 ms
+    TCP Probes: 7000
+    Open TCP Ports: 2
+      Port: 22/tcp | State: open | Latency: 1.4 ms
+      Port: 443/tcp | State: open | Latency: 1.8 ms
+
+  Host 3
+    IPv4: 192.168.1.25
+    MAC: aa:bb:cc:dd:ee:25
+    ARP RTT: 3.4 ms
+    TCP Probes: 7000
+    Open TCP Ports: 1
+      Port: 3389/tcp | State: open | Latency: 2.1 ms
+```
+
 ## Scope and limits
 
 Arpticuno is restricted to private or link-local IPv4 LAN targets and TCP connect scanning. The implementation includes bounds for target count, address scope, retries, discovered hosts, workers, timeouts, and total TCP probes.
