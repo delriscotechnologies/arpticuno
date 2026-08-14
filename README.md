@@ -133,12 +133,6 @@ ARP is unauthenticated. An observed reply does not prove device identity or owne
 
 See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 
-## Project files
-
-- `arpticuno/` — application code
-- `assets/` — project logo
-- `pyproject.toml` — package and dependency configuration
-
 ## License
 
 Arpticuno is released under the [MIT License](LICENSE).
