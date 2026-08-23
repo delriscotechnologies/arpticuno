@@ -12,16 +12,6 @@ Arpticuno is a small Python CLI for discovering IPv4 hosts on a local private or
 
 > Use Arpticuno only on systems and networks you own or have explicit permission to test.
 
-## Requirements
-
-- Python 3.10 or newer
-- Scapy 2.7.0
-- A private or link-local IPv4 target directly connected to the selected interface
-- Local Layer-2 access to the target for ARP discovery
-- Elevated privileges when required for raw ARP traffic
-
-On Windows, install [Npcap](https://npcap.com/#download) for the Layer-2 packet access required by Scapy.
-
 ## Install
 
 Clone the repository:
@@ -29,29 +19,6 @@ Clone the repository:
 ```bash
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
-```
-
-Linux or macOS:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
-```
-
-Windows PowerShell:
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install .
-```
-
-After installation, use the built-in help for the current command syntax and options:
-
-```bash
-arpticuno --help
-arpticuno scan --help
 ```
 
 ## What it does
@@ -74,16 +41,6 @@ Supported formats:
 - `csv` — spreadsheet, pipeline, or SIEM-friendly output
 
 JSON reports use `schema_version: 1.0`.
-
-Probe failures remain visible in the summaries so timeouts or unreachable destinations are not reported as confirmed closed ports.
-
-Top-level result states are:
-
-- `completed`
-- `partial`
-- `inconclusive`
-- `no-open-ports`
-- `no-arp-responders`
 
 ## Demo
 
