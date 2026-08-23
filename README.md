@@ -16,18 +16,34 @@ Arpticuno is a small Python CLI for discovering IPv4 hosts on a local private or
 
 - Python 3.10 or newer
 - Scapy 2.7.0
-- Local Layer-2 access for ARP discovery
+- A private or link-local IPv4 target directly connected to the selected interface
+- Local Layer-2 access to the target for ARP discovery
 - Elevated privileges when required for raw ARP traffic
 
-Linux is the primary supported environment. On Windows, Scapy requires Npcap for Layer-2 packet access.
+On Windows, install [Npcap](https://npcap.com/#download) for the Layer-2 packet access required by Scapy.
 
 ## Install
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
+```
+
+Linux or macOS:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install .
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install .
 ```
 
@@ -42,12 +58,12 @@ arpticuno scan --help
 
 Arpticuno:
 
-1. Validates private or link-local IPv4 targets.
+1. Validates private or link-local IPv4 targets that are directly connected to the selected interface.
 2. Records valid ARP replies within the requested scope.
 3. Checks selected TCP ports with normal socket connections.
 4. Produces table, JSON, or CSV output.
 
-The default TCP selection is ports `1-7000`. The CLI also supports custom port selections, worker counts, connection timeouts, output files, banner suppression, and an optional inconclusive-result exit code.
+The default TCP selection is ports `1-7000`. The CLI also supports custom port selections, worker counts, connection timeouts, output files, and banner suppression. With `--fail-on-inconclusive`, the command returns exit code `3` when every TCP probe fails.
 
 ## Output
 
@@ -127,7 +143,23 @@ ARP responders:
 
 ## Scope and limits
 
-Arpticuno is restricted to private or link-local IPv4 LAN targets and TCP connect scanning. The implementation includes bounds for target count, address scope, retries, discovered hosts, workers, timeouts, and total TCP probes.
+Arpticuno is restricted to private or link-local IPv4 targets on a directly connected LAN and to TCP connect scanning. Private networks reached through a router are outside the ARP discovery scope.
+
+The implementation enforces these safety limits:
+
+| Limit | Maximum |
+| --- | ---: |
+| Comma-separated target entries | 256 |
+| Distinct ARP target addresses | 65,536 |
+| ARP requests, including retries | 65,536 |
+| ARP retries | 5 |
+| Discovered hosts | 256 |
+| TCP ports per host | 65,535 |
+| Concurrent TCP workers | 512 |
+| ARP or TCP timeout | 10 seconds |
+| Total TCP probes | 1,000,000 |
+
+ARP requests are calculated as `target addresses × (retries + 1)`. A target that fits the address limit can therefore exceed the request limit when retries are enabled.
 
 ARP is unauthenticated. An observed reply does not prove device identity or ownership. If conflicting MAC addresses are observed for one IPv4 address, the MAC is reported as unknown.
 
