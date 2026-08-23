@@ -2,73 +2,63 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Sequence, TextIO
+from collections.abc import Sequence
+from typing import TextIO
 
 from arpticuno.cli import _print_branding
 from arpticuno.discovery import Host
 from arpticuno.ports import PortResult
 from arpticuno.reporting import build_payload, render_csv, render_json, render_table
 
+HOST_DATA = (
+    ("192.168.1.1", "aa:bb:cc:dd:ee:01", 1.2),
+    ("192.168.1.10", "aa:bb:cc:dd:ee:10", 2.7),
+    ("192.168.1.25", "aa:bb:cc:dd:ee:25", 3.4),
+)
+PORT_DATA = (
+    ("192.168.1.1", 53, 0.8),
+    ("192.168.1.1", 80, 0.9),
+    ("192.168.1.10", 22, 1.4),
+    ("192.168.1.10", 443, 1.8),
+    ("192.168.1.25", 3389, 2.1),
+)
+
 
 def build_demo_payload() -> dict:
-    hosts = [
-        Host(ip="192.168.1.1", mac="aa:bb:cc:dd:ee:01", rtt_ms=1.2),
-        Host(ip="192.168.1.10", mac="aa:bb:cc:dd:ee:10", rtt_ms=2.7),
-        Host(ip="192.168.1.25", mac="aa:bb:cc:dd:ee:25", rtt_ms=3.4),
-    ]
-    ports = [
-        PortResult(host="192.168.1.1", port=53, proto="tcp", state="open", latency_ms=0.8),
-        PortResult(host="192.168.1.1", port=80, proto="tcp", state="open", latency_ms=0.9),
-        PortResult(host="192.168.1.10", port=22, proto="tcp", state="open", latency_ms=1.4),
-        PortResult(host="192.168.1.10", port=443, proto="tcp", state="open", latency_ms=1.8),
-        PortResult(host="192.168.1.25", port=3389, proto="tcp", state="open", latency_ms=2.1),
-    ]
-    probe_summaries = {
-        "192.168.1.1": {"total": 7000, "open": 2, "closed": 6998},
-        "192.168.1.10": {"total": 7000, "open": 2, "closed": 6998},
-        "192.168.1.25": {"total": 7000, "open": 1, "closed": 6999},
+    hosts = [Host(*values) for values in HOST_DATA]
+    ports = [PortResult(host=host, port=port, state="open", latency_ms=rtt) for host, port, rtt in PORT_DATA]
+    summaries = {
+        host.ip: {
+            "total": 7000,
+            "open": sum(result.host == host.ip for result in ports),
+            "closed": 7000 - sum(result.host == host.ip for result in ports),
+        }
+        for host in hosts
     }
     return build_payload(
         command="scan",
-        inputs={
-            "target": "192.168.1.0/24",
-            "port_range": "1-7000",
-            "connect_timeout": 0.2,
-            "workers": 256,
-            "sandbox": True,
-        },
+        inputs={"target": "192.168.1.0/24", "ports": "1-7000", "sandbox": True},
         hosts=hosts,
         ports=ports,
-        probe_summaries=probe_summaries,
+        probe_summaries=summaries,
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="python -m arpticuno.sandbox",
-        description="Preview how Arpticuno looks in the terminal without scanning a real network.",
-    )
-    parser.add_argument("--format", choices=["table", "json", "csv"], default="table")
-    parser.add_argument("--no-banner", action="store_true", help="Hide the banner in table mode")
+    parser = argparse.ArgumentParser(description="Preview Arpticuno without network traffic")
+    parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
+    parser.add_argument("--no-banner", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None, *, stdout: TextIO | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     out = stdout or sys.stdout
     payload = build_demo_payload()
-
     if args.format == "table" and not args.no_banner:
         _print_branding(out)
-
-    if args.format == "json":
-        print(render_json(payload), file=out)
-    elif args.format == "csv":
-        print(render_csv(payload), end="", file=out)
-    else:
-        print(render_table(payload), end="", file=out)
-
+    renderer = {"table": render_table, "json": render_json, "csv": render_csv}[args.format]
+    print(renderer(payload), end="" if args.format != "json" else "\n", file=out)
     return 0
 
 

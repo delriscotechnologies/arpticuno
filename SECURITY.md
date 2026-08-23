@@ -16,7 +16,7 @@ The Arpticuno CLI and batch scan APIs accept private or link-local IPv4 LAN targ
 
 `probe_connect()` is a low-level socket helper and does not enforce target authorization or LAN scope by itself. Applications calling it directly are responsible for validating their targets.
 
-The implementation bounds target count, total address scope, ARP request rounds, discovered hosts, worker count, timeouts, and total TCP probes to reduce accidental resource exhaustion.
+The implementation bounds target count, total address scope, total ARP requests, discovered hosts, worker count, timeouts, and total TCP probes to reduce accidental resource exhaustion.
 
 ## ARP trust boundary
 

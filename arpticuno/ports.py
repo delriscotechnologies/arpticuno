@@ -3,16 +3,16 @@ from __future__ import annotations
 import errno
 import math
 import socket
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Callable, Sequence
 
 from arpticuno.discovery import validate_local_ipv4_host
 
+MAX_PORT = 65_535
 MAX_WORKERS = 512
 MAX_TIMEOUT_SECONDS = 10.0
-MAX_PORTS_PER_HOST = 65_535
 MAX_HOSTS_PER_SCAN = 256
 MAX_TOTAL_PROBES = 1_000_000
 MAX_PENDING_PER_WORKER = 2
@@ -28,128 +28,93 @@ class PortResult:
     error: str | None = None
 
 
-def parse_ports(value: str) -> list[int]:
-    """Parse a comma-separated TCP port selection with optional ranges."""
-    if not isinstance(value, str):
-        raise ValueError("Ports must be provided as text")
-    value = value.strip()
-    if not value:
-        raise ValueError("Ports cannot be empty")
+Probe = Callable[[str, int, float], PortResult]
+ProgressCallback = Callable[[int, int], None]
+ResultCallback = Callable[[PortResult], None]
 
-    ports: list[int] = []
-    for part in value.split(","):
-        part = part.strip()
+
+def parse_ports(value: str) -> list[int]:
+    """Parse comma-separated TCP ports and inclusive ranges."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Ports must be non-empty text")
+
+    ports: set[int] = set()
+    for raw_part in value.split(","):
+        part = raw_part.strip()
         if not part:
             raise ValueError(f"Invalid port list: {value}")
         try:
-            if "-" in part:
-                if part.count("-") != 1:
-                    raise ValueError
-                start_text, end_text = part.split("-", 1)
-                start = int(start_text)
-                end = int(end_text)
-                if start > end:
-                    raise ValueError("Port range start must be less than or equal to end")
-                _validate_port(start)
-                _validate_port(end)
-                ports.extend(range(start, end + 1))
-            else:
-                port = int(part)
-                _validate_port(port)
-                ports.append(port)
+            bounds = [int(item) for item in part.split("-")]
         except ValueError as exc:
-            if str(exc).startswith("Port"):
-                raise
             raise ValueError(f"Invalid port list: {value}") from exc
-    return sorted(set(ports))
+        if len(bounds) == 1:
+            ports.add(_validate_port(bounds[0]))
+        elif len(bounds) == 2:
+            start, end = map(_validate_port, bounds)
+            if start > end:
+                raise ValueError("Port range start must be less than or equal to end")
+            ports.update(range(start, end + 1))
+        else:
+            raise ValueError(f"Invalid port list: {value}")
+    return sorted(ports)
 
 
-def _validate_port(port: int) -> None:
+def _validate_port(port: int) -> int:
     if isinstance(port, bool) or not isinstance(port, int):
-        raise ValueError("Ports must be integers")
-    if port < 1 or port > 65535:
-        raise ValueError("Ports must be between 1 and 65535")
+        raise TypeError("Ports must be integers")
+    if not 1 <= port <= MAX_PORT:
+        raise ValueError(f"Ports must be between 1 and {MAX_PORT}")
+    return port
 
 
-def _validate_scan_options(ports: Sequence[int], timeout: float, workers: int) -> list[int]:
+def validate_scan_options(ports: Sequence[int], timeout: float, workers: int) -> list[int]:
+    """Validate TCP controls and return de-duplicated ports."""
     if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout):
         raise ValueError("TCP connect timeout must be a finite number")
-    if timeout <= 0 or timeout > MAX_TIMEOUT_SECONDS:
-        raise ValueError(
-            f"TCP connect timeout must be greater than 0 and no more than {MAX_TIMEOUT_SECONDS:g} seconds"
-        )
-    if isinstance(workers, bool) or not isinstance(workers, int):
-        raise ValueError("Workers must be an integer")
-    if workers < 1 or workers > MAX_WORKERS:
-        raise ValueError(f"Workers must be between 1 and {MAX_WORKERS}")
+    if not 0 < timeout <= MAX_TIMEOUT_SECONDS:
+        raise ValueError(f"TCP connect timeout must be greater than 0 and no more than {MAX_TIMEOUT_SECONDS:g} seconds")
+    if isinstance(workers, bool) or not isinstance(workers, int) or not 1 <= workers <= MAX_WORKERS:
+        raise ValueError(f"Workers must be an integer between 1 and {MAX_WORKERS}")
     if isinstance(ports, (str, bytes)):
-        raise ValueError("Ports must be a sequence of integers")
-    if len(ports) > MAX_PORTS_PER_HOST:
-        raise ValueError(f"A scan cannot contain more than {MAX_PORTS_PER_HOST} TCP ports per host")
+        raise TypeError("Ports must be a sequence of integers")
+    if len(ports) > MAX_PORT:
+        raise ValueError(f"A scan cannot contain more than {MAX_PORT} TCP ports per host")
 
-    validated_ports = list(dict.fromkeys(ports))
-    for port in validated_ports:
-        _validate_port(port)
-    return validated_ports
+    validated = list(dict.fromkeys(_validate_port(port) for port in ports))
+    return validated
 
 
-def _latency_ms(start: float) -> float:
-    return round((perf_counter() - start) * 1000.0, 2)
+def _result(host: str, port: int, state: str, start: float, error: str | None = None) -> PortResult:
+    return PortResult(
+        host=host,
+        port=port,
+        state=state,
+        latency_ms=round((perf_counter() - start) * 1000, 2),
+        error=error,
+    )
 
 
 def probe_connect(host: str, port: int, timeout: float = 0.75) -> PortResult:
-    """Probe one TCP port using a normal kernel-managed TCP connect attempt."""
+    """Probe one TCP port with a kernel-managed connection attempt."""
     _validate_port(port)
-    if (
-        isinstance(timeout, bool)
-        or not isinstance(timeout, (int, float))
-        or not math.isfinite(timeout)
-        or timeout <= 0
-    ):
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("TCP connect timeout must be a positive finite number")
 
     start = perf_counter()
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            return PortResult(host=host, port=port, state="open", latency_ms=_latency_ms(start))
-    except ConnectionRefusedError:
-        return PortResult(
-            host=host,
-            port=port,
-            state="closed",
-            latency_ms=_latency_ms(start),
-            error="connection-refused",
-        )
-    except socket.timeout:
-        return PortResult(
-            host=host,
-            port=port,
-            state="timeout",
-            latency_ms=_latency_ms(start),
-            error="timeout",
-        )
+            return _result(host, port, "open", start)
+    except TimeoutError:
+        return _result(host, port, "timeout", start, "timeout")
     except OSError as exc:
         code = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
         if code in {errno.ECONNREFUSED, 10061}:
-            state, error = "closed", "connection-refused"
-        elif code in {errno.ETIMEDOUT, 10060}:
-            state, error = "timeout", "timeout"
-        elif code in {errno.EHOSTUNREACH, errno.ENETUNREACH, 10051, 10065}:
-            state, error = "unreachable", str(code)
-        else:
-            state, error = "error", str(exc)
-        return PortResult(
-            host=host,
-            port=port,
-            state=state,
-            latency_ms=_latency_ms(start),
-            error=error,
-        )
-
-
-Probe = Callable[[str, int, float], PortResult]
-ProgressCallback = Callable[[int, int], None]
-ResultCallback = Callable[[PortResult], None]
+            return _result(host, port, "closed", start, "connection-refused")
+        if code in {errno.ETIMEDOUT, 10060}:
+            return _result(host, port, "timeout", start, "timeout")
+        if code in {errno.EHOSTUNREACH, errno.ENETUNREACH, 10051, 10065}:
+            return _result(host, port, "unreachable", start, str(code))
+        return _result(host, port, "error", start, str(exc))
 
 
 def scan_tcp_ports(
@@ -162,45 +127,17 @@ def scan_tcp_ports(
     progress: ProgressCallback | None = None,
     result_callback: ResultCallback | None = None,
 ) -> list[PortResult]:
-    """Scan many ports on one authorized LAN host with bounded concurrency."""
-    validated_host = validate_local_ipv4_host(host)
-    validated_ports = _validate_scan_options(ports, timeout, workers)
-    if not validated_ports:
-        return []
-
-    results_by_index: list[PortResult | None] = [None] * len(validated_ports)
-    completed = 0
-    indexed_ports = iter(enumerate(validated_ports))
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        pending: dict[Future[PortResult], int] = {}
-
-        def submit_next() -> bool:
-            try:
-                index, port = next(indexed_ports)
-            except StopIteration:
-                return False
-            pending[pool.submit(probe, validated_host, port, timeout)] = index
-            return True
-
-        for _ in range(min(len(validated_ports), workers * MAX_PENDING_PER_WORKER)):
-            submit_next()
-
-        while pending:
-            completed_futures, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
-            for future in completed_futures:
-                index = pending.pop(future)
-                result = future.result()
-                results_by_index[index] = result
-                completed += 1
-                if result_callback is not None:
-                    result_callback(result)
-                if progress is not None:
-                    progress(completed, len(validated_ports))
-                submit_next()
-
-    results = [result for result in results_by_index if result is not None]
-    return [result for result in results if result.state == "open"] if open_only else results
+    """Scan many ports on one authorized LAN host."""
+    return scan_ports_threaded(
+        [host],
+        ports,
+        timeout=timeout,
+        workers=workers,
+        probe=probe,
+        open_only=open_only,
+        progress=progress,
+        result_callback=result_callback,
+    )
 
 
 def scan_ports_threaded(
@@ -213,43 +150,48 @@ def scan_ports_threaded(
     progress: ProgressCallback | None = None,
     result_callback: ResultCallback | None = None,
 ) -> list[PortResult]:
-    """Scan multiple authorized LAN hosts with the shared bounded port engine."""
+    """Scan all host/port pairs through one bounded worker pool."""
     if isinstance(hosts, (str, bytes)):
-        raise ValueError("Hosts must be a sequence of IPv4 addresses")
+        raise TypeError("Hosts must be a sequence of IPv4 addresses")
     if len(hosts) > MAX_HOSTS_PER_SCAN:
-        raise ValueError(f"A scan cannot contain more than {MAX_HOSTS_PER_SCAN} discovered hosts")
+        raise ValueError(f"A scan cannot contain more than {MAX_HOSTS_PER_SCAN} hosts")
 
-    validated_hosts = list(dict.fromkeys(validate_local_ipv4_host(host) for host in hosts))
-    validated_ports = _validate_scan_options(ports, timeout, workers)
-    total_steps = len(validated_hosts) * len(validated_ports)
-    if total_steps > MAX_TOTAL_PROBES:
-        raise ValueError(
-            f"Scan would create {total_steps:,} TCP probes; the safety limit is {MAX_TOTAL_PROBES:,}. "
-            "Use a narrower target scope."
-        )
+    checked_hosts = list(dict.fromkeys(validate_local_ipv4_host(host) for host in hosts))
+    checked_ports = validate_scan_options(ports, timeout, workers)
+    total = len(checked_hosts) * len(checked_ports)
+    if total > MAX_TOTAL_PROBES:
+        raise ValueError(f"Scan would create {total:,} TCP probes; the safety limit is {MAX_TOTAL_PROBES:,}")
+    if not total:
+        return []
 
-    results: list[PortResult] = []
-    completed_steps = 0
-    for host in validated_hosts:
-        previous_done_for_host = 0
+    jobs = iter(enumerate((host, port) for host in checked_hosts for port in checked_ports))
+    results: list[tuple[int, PortResult]] = []
+    completed = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending: dict[Future[PortResult], int] = {}
 
-        def host_progress(done_for_host: int, total_for_host: int) -> None:
-            nonlocal completed_steps, previous_done_for_host
-            completed_steps += done_for_host - previous_done_for_host
-            previous_done_for_host = done_for_host
-            if progress is not None:
-                progress(completed_steps, total_steps)
+        def submit_next() -> bool:
+            try:
+                index, (host, port) = next(jobs)
+            except StopIteration:
+                return False
+            pending[pool.submit(probe, host, port, timeout)] = index
+            return True
 
-        results.extend(
-            scan_tcp_ports(
-                host,
-                validated_ports,
-                timeout=timeout,
-                probe=probe,
-                workers=workers,
-                open_only=open_only,
-                progress=host_progress if total_steps else None,
-                result_callback=result_callback,
-            )
-        )
-    return results
+        for _ in range(min(total, workers * MAX_PENDING_PER_WORKER)):
+            submit_next()
+        while pending:
+            finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+            for future in finished:
+                index = pending.pop(future)
+                result = future.result()
+                if not open_only or result.state == "open":
+                    results.append((index, result))
+                if result_callback:
+                    result_callback(result)
+                completed += 1
+                if progress:
+                    progress(completed, total)
+                submit_next()
+
+    return [result for _, result in sorted(results)]

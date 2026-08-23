@@ -90,11 +90,11 @@ Example table output:
                          MM
                        .JMML.
 
-                             ╔══════════════════════════╗
-                             ║  Del Risco Technologies  ║
-                             ╚══════════════════════════╝
+                             +--------------------------+
+                             |  Del Risco Technologies  |
+                             +--------------------------+
 
-Results:  Target(s): 192.168.1.0/24  │  Total ARP responders: 3  │  Total TCP probes: 21000  │  Total open TCP ports: 5
+Results: Target(s): 192.168.1.0/24 | ARP responders: 3 | TCP probes: 21000 | Open TCP ports: 5
 Status: completed
 
 ARP responders:
