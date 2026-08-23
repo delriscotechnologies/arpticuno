@@ -3,10 +3,11 @@ from __future__ import annotations
 import csv
 import json
 import unicodedata
-from collections.abc import Iterator
+from collections import Counter, defaultdict
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from io import StringIO
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from arpticuno import __version__
@@ -18,12 +19,13 @@ SCHEMA_VERSION = "1.0"
 PROBE_STATES = ("open", "closed", "timeout", "unreachable", "error")
 FAILURE_STATES = ("timeout", "unreachable", "error")
 FORMULA_PREFIXES = ("=", "+", "-", "@")
-CSV_FIELDS = (
-    "scan_id", "command", "target", "host_ip", "host_mac", "arp_rtt_ms",
-    "port", "proto", "state", "latency_ms", "error", "started_at", "finished_at",
-    "record_type", "status", "total_probes", "open_count", "closed_count",
-    "timeout_count", "unreachable_count", "error_count", "schema_version",
-)
+PORT_FIELDS = ("port", "proto", "state", "latency_ms", "error")
+CSV_FIELDS = [
+    "scan_id", "command", "target", "host_ip", "host_mac", "arp_rtt_ms", "port", "proto",
+    "state", "latency_ms", "error", "started_at", "finished_at", "record_type", "status",
+    "total_probes", "open_count", "closed_count", "timeout_count", "unreachable_count",
+    "error_count", "schema_version",
+]
 
 
 def build_payload(
@@ -36,9 +38,9 @@ def build_payload(
     probe_summaries: dict[str, dict[str, int]] | None = None,
 ) -> Payload:
     """Build the stable report shared by every renderer."""
-    ports_by_host: dict[str, list[PortResult]] = {}
+    grouped: defaultdict[str, list[PortResult]] = defaultdict(list)
     for result in ports:
-        ports_by_host.setdefault(result.host, []).append(result)
+        grouped[result.host].append(result)
     finished_at = datetime.now(timezone.utc).isoformat()
     payload: Payload = {
         "schema_version": SCHEMA_VERSION,
@@ -49,66 +51,42 @@ def build_payload(
         "started_at": started_at or finished_at,
         "finished_at": finished_at,
         "inputs": inputs,
-        "hosts": [
-            _host_payload(host, ports_by_host.get(host.ip, []), probe_summaries)
-            for host in hosts
-        ],
+        "hosts": [_host_payload(host, grouped[host.ip], probe_summaries) for host in hosts],
     }
     payload["status"] = scan_status(payload)
     return payload
 
 
 def _host_payload(
-    host: Host,
-    ports: list[PortResult],
-    summaries: dict[str, dict[str, int]] | None,
+    host: Host, results: list[PortResult], summaries: dict[str, dict[str, int]] | None
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ip": host.ip,
         "mac": host.mac,
         "arp_rtt_ms": host.rtt_ms,
-        "ports": [
-            {
-                "port": result.port,
-                "proto": result.proto,
-                "state": result.state,
-                "latency_ms": result.latency_ms,
-                "error": result.error,
-            }
-            for result in ports
-        ],
+        "ports": [{field: getattr(result, field) for field in PORT_FIELDS} for result in results],
     }
     if summaries is not None:
-        payload["probe_summary"] = _normalize_summary(ports, summaries.get(host.ip))
+        if host.ip in summaries:
+            payload["probe_summary"] = summaries[host.ip]
+        payload["probe_summary"] = _summary(payload)
     return payload
 
 
-def _normalize_summary(
-    ports: list[PortResult], supplied: dict[str, int] | None = None
-) -> dict[str, int]:
-    counts = {state: 0 for state in PROBE_STATES}
-    if supplied is None:
-        for result in ports:
-            counts[result.state if result.state in counts else "error"] += 1
-        total = sum(counts.values())
-    else:
-        counts.update({state: max(0, int(supplied.get(state, 0))) for state in PROBE_STATES})
-        total = max(max(0, int(supplied.get("total", 0))), sum(counts.values()))
-    return {"total": total, **counts}
-
-
-def _summary_for_host(host: dict[str, Any]) -> dict[str, int]:
+def _summary(host: dict[str, Any]) -> dict[str, int]:
     supplied = host.get("probe_summary")
-    if isinstance(supplied, dict):
-        return _normalize_summary([], cast(dict[str, int], supplied))
-    counts = {state: 0 for state in PROBE_STATES}
-    for port in host.get("ports", []):
-        state = port.get("state")
-        counts[state if state in counts else "error"] += 1
-    return {"total": sum(counts.values()), **counts}
+    if isinstance(supplied, Mapping):
+        counts = Counter({state: max(0, int(supplied.get(state, 0))) for state in PROBE_STATES})
+        reported_total = max(0, int(supplied.get("total", 0)))
+    else:
+        states = (port.get("state") for port in host.get("ports", []))
+        counts = Counter(state if state in PROBE_STATES else "error" for state in states)
+        reported_total = 0
+    normalized = {state: counts[state] for state in PROBE_STATES}
+    return {"total": max(reported_total, sum(normalized.values())), **normalized}
 
 
-def _failures(summary: dict[str, int]) -> int:
+def _failure_count(summary: Mapping[str, int]) -> int:
     return sum(summary.get(state, 0) for state in FAILURE_STATES)
 
 
@@ -116,14 +94,12 @@ def scan_status(payload: Payload) -> str:
     hosts = payload.get("hosts", [])
     if not hosts:
         return "no-arp-responders"
-    summaries = [_summary_for_host(host) for host in hosts]
-    if all(summary["total"] > 0 and _failures(summary) == summary["total"] for summary in summaries):
+    summaries = [_summary(host) for host in hosts]
+    if all(summary["total"] and _failure_count(summary) == summary["total"] for summary in summaries):
         return "inconclusive"
-    if any(_failures(summary) for summary in summaries):
+    if any(_failure_count(summary) for summary in summaries):
         return "partial"
-    if any(summary["open"] for summary in summaries):
-        return "completed"
-    return "no-open-ports"
+    return "completed" if any(summary["open"] for summary in summaries) else "no-open-ports"
 
 
 def is_inconclusive(payload: Payload) -> bool:
@@ -134,19 +110,14 @@ def render_json(payload: Payload) -> str:
     return json.dumps(payload, indent=2, allow_nan=False)
 
 
-def _target(payload: Payload) -> str:
-    return str(payload.get("inputs", {}).get("target", ""))
-
-
 def render_table(payload: Payload) -> str:
     hosts = payload.get("hosts", [])
-    total_probes = sum(_summary_for_host(host)["total"] for host in hosts)
-    open_count = sum(
-        port.get("state") == "open" for host in hosts for port in host.get("ports", [])
-    )
+    target = str(payload.get("inputs", {}).get("target", ""))
+    total_probes = sum(_summary(host)["total"] for host in hosts)
+    open_count = sum(port.get("state") == "open" for host in hosts for port in host.get("ports", []))
     lines = [
         (
-            f"Results: Target(s): {_target(payload) or '-'} | ARP responders: {len(hosts)} | "
+            f"Results: Target(s): {target or '-'} | ARP responders: {len(hosts)} | "
             f"TCP probes: {total_probes} | Open TCP ports: {open_count}"
         ),
         f"Status: {scan_status(payload)}",
@@ -158,13 +129,13 @@ def render_table(payload: Payload) -> str:
     for index, host in enumerate(hosts, 1):
         if index > 1:
             lines.append("")
-        lines.extend(_render_host(index, host))
+        lines.extend(_host_lines(index, host))
     return "\n".join(lines) + "\n"
 
 
-def _render_host(index: int, host: dict[str, Any]) -> list[str]:
-    summary = _summary_for_host(host)
-    failures = _failures(summary)
+def _host_lines(index: int, host: dict[str, Any]) -> list[str]:
+    summary = _summary(host)
+    failures = _failure_count(summary)
     open_ports = [port for port in host.get("ports", []) if port.get("state") == "open"]
     lines = [
         f"  Host {index}",
@@ -176,11 +147,11 @@ def _render_host(index: int, host: dict[str, Any]) -> list[str]:
     ]
     if failures:
         lines.append(f"    Probe Warning: {failures} probes timed out, were unreachable, or failed.")
-    for port in open_ports:
-        lines.append(
-            f"      Port: {port['port']}/{port['proto']} | State: {port['state']} | "
-            f"Latency: {_display(port.get('latency_ms'))} ms"
-        )
+    lines.extend(
+        f"      Port: {port['port']}/{port['proto']} | State: {port['state']} | "
+        f"Latency: {_display(port.get('latency_ms'))} ms"
+        for port in open_ports
+    )
     if not open_ports:
         message = (
             "No conclusive TCP port result was obtained for this host."
@@ -195,43 +166,30 @@ def render_csv(payload: Payload) -> str:
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, lineterminator="\n")
     writer.writeheader()
-    writer.writerows(_sanitize_csv_row(row) for row in _csv_rows(payload))
+    for host in payload.get("hosts", []) or (None,):
+        ports = host.get("ports", []) or (None,) if host is not None else (None,)
+        for port in ports:
+            row = _csv_row(payload, host, port)
+            writer.writerow({key: _csv_safe(value) for key, value in row.items()})
     return buffer.getvalue()
 
 
-def _csv_rows(payload: Payload) -> Iterator[dict[str, Any]]:
-    hosts = payload.get("hosts", [])
-    if not hosts:
-        yield _csv_row(payload)
-        return
-    for host in hosts:
-        ports = host.get("ports", [])
-        if ports:
-            for port in ports:
-                yield _csv_row(payload, host, port)
-        else:
-            yield _csv_row(payload, host)
-
-
 def _csv_row(
-    payload: Payload,
-    host: dict[str, Any] | None = None,
-    port: dict[str, Any] | None = None,
+    payload: Payload, host: dict[str, Any] | None, port: dict[str, Any] | None
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "schema_version": payload.get("schema_version", SCHEMA_VERSION),
         "scan_id": payload["scan_id"],
         "command": payload["command"],
-        "target": _target(payload),
+        "target": str(payload.get("inputs", {}).get("target", "")),
         "started_at": payload.get("started_at", ""),
         "finished_at": payload.get("finished_at", ""),
     }
     if host is None:
-        row.update(record_type="scan", status=scan_status(payload))
-        return row
+        return row | {"record_type": "scan", "status": scan_status(payload)}
 
-    summary = _summary_for_host(host)
-    failures = _failures(summary)
+    summary = _summary(host)
+    failures = _failure_count(summary)
     status = (
         "probe-failure" if summary["total"] and failures == summary["total"]
         else "partial-probe-failure" if failures
@@ -248,36 +206,20 @@ def _csv_row(
         total_probes=summary["total"],
         **{f"{state}_count": summary[state] for state in PROBE_STATES},
     )
-    if port:
-        row.update(
-            port=port["port"],
-            proto=port["proto"],
-            state=port["state"],
-            latency_ms=_display(port.get("latency_ms"), ""),
-            error=port.get("error") or "",
-        )
+    if port is not None:
+        row.update({field: _display(port.get(field), "") for field in PORT_FIELDS})
     return row
-
-
-def _sanitize_csv_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: _csv_safe(value) for key, value in row.items()}
 
 
 def _csv_safe(value: Any) -> Any:
     if not isinstance(value, str) or not value:
         return value
-    first_visible = 0
-    leading_control = False
-    while first_visible < len(value):
-        character = value[first_visible]
-        is_control = unicodedata.category(character).startswith("C")
-        if not character.isspace() and not is_control:
-            break
-        leading_control |= is_control
-        first_visible += 1
-    if leading_control or value[first_visible:].startswith(FORMULA_PREFIXES):
-        return f"'{value}"
-    return value
+    first = next(
+        (index for index, char in enumerate(value) if not char.isspace() and not unicodedata.category(char).startswith("C")),
+        len(value),
+    )
+    leading_control = any(unicodedata.category(char).startswith("C") for char in value[:first])
+    return f"'{value}" if leading_control or value[first:].startswith(FORMULA_PREFIXES) else value
 
 
 def _display(value: Any, empty: str = "-") -> str:

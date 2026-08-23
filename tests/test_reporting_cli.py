@@ -44,6 +44,46 @@ def test_csv_prevents_formula_injection() -> None:
     assert row["target"] == "'=2+2"
 
 
+def test_csv_prevents_formula_injection_after_control_characters() -> None:
+    payload = build_payload("scan", {"target": "\x00  =2+2"}, [], [])
+    row = next(csv.DictReader(io.StringIO(render_csv(payload))))
+    assert row["target"] == "'\x00  =2+2"
+
+
+def test_empty_supplied_summaries_fall_back_to_observed_ports() -> None:
+    payload = build_payload(
+        "scan",
+        {"target": "192.168.1.2"},
+        [Host("192.168.1.2")],
+        [PortResult("192.168.1.2", 80, "open")],
+        probe_summaries={},
+    )
+    assert payload["hosts"][0]["probe_summary"]["open"] == 1
+    assert payload["status"] == "completed"
+
+
+def test_unknown_probe_states_are_reported_as_errors() -> None:
+    payload = build_payload(
+        "scan",
+        {"target": "192.168.1.2"},
+        [Host("192.168.1.2")],
+        [PortResult("192.168.1.2", 80, "unexpected")],
+    )
+    assert payload["status"] == "inconclusive"
+    assert "Probe Warning: 1" in render_table(payload)
+
+
+def test_csv_emits_scan_host_and_port_record_types() -> None:
+    empty = build_payload("scan", {"target": "192.168.1.0/24"}, [], [])
+    host_only = build_payload("scan", {"target": "192.168.1.2"}, [Host("192.168.1.2")], [])
+    with_port = payload_with("open")
+    record_types = [
+        next(csv.DictReader(io.StringIO(render_csv(payload))))["record_type"]
+        for payload in (empty, host_only, with_port)
+    ]
+    assert record_types == ["scan", "host", "port"]
+
+
 def test_cli_runs_complete_injected_scan_without_network() -> None:
     stdout, stderr = io.StringIO(), io.StringIO()
 
