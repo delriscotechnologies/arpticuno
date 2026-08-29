@@ -14,12 +14,25 @@ Arpticuno is a small Python CLI for discovering IPv4 hosts on a local private or
 
 ## Install
 
-Clone the repository:
+You need Python 3.10 or newer. ARP discovery also requires permission to send and receive layer-2 packets on the selected interface. On Linux, run the scanner with the required elevated privileges; on Windows, use an Administrator terminal.
+
+Clone the repository, create a virtual environment, and install the command:
 
 ```bash
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install .
 ```
+
+Run an authorized scan on Linux:
+
+```bash
+sudo .venv/bin/arpticuno scan 192.168.1.0/24 --ports 22,80,443
+```
+
+On Windows, activate the environment with `.\.venv\Scripts\Activate.ps1`, run the same installation command, and start `arpticuno scan` from an Administrator terminal.
 
 ## What it does
 
@@ -119,6 +132,8 @@ The implementation enforces these safety limits:
 ARP requests are calculated as `target addresses × (retries + 1)`. A target that fits the address limit can therefore exceed the request limit when retries are enabled.
 
 ARP is unauthenticated. An observed reply does not prove device identity or ownership. If conflicting MAC addresses are observed for one IPv4 address, the MAC is reported as unknown.
+
+Scapy requires elevated privileges to send ARP packets. Grant only the minimum permissions required by your operating system, and do not run package installation commands with elevated privileges.
 
 See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 
