@@ -11,7 +11,7 @@ def build_demo_payload() -> dict:
         host.ip: {"total": 7000, **dict.fromkeys(STATES, 0), "open": sum(port.host == host.ip for port in PORTS),
                   "closed": 7000 - sum(port.host == host.ip for port in PORTS)} for host in HOSTS
     }
-    return build_payload("192.168.1.0/24", "1-7000", 1.0, None, 0, 0.2, 256, HOSTS, PORTS, summaries, "1970-01-01T00:00:00+00:00")
+    return build_payload("192.168.1.0/24", "1-7000", None, 0, 0.2, 256, HOSTS, PORTS, summaries, "1970-01-01T00:00:00+00:00")
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Preview Arpticuno without network traffic")
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
