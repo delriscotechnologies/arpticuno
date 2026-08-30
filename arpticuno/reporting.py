@@ -3,224 +3,122 @@ from __future__ import annotations
 import csv
 import json
 import unicodedata
-from collections import Counter, defaultdict
-from collections.abc import Mapping
+from collections import defaultdict
 from datetime import datetime, timezone
 from io import StringIO
 from typing import Any
 from uuid import uuid4
 
 from arpticuno import __version__
-from arpticuno.discovery import Host
-from arpticuno.ports import PortResult
+from arpticuno.scanner import STATES, Host, PortResult
 
-Payload = dict[str, Any]
-SCHEMA_VERSION = "1.0"
-PROBE_STATES = ("open", "closed", "timeout", "unreachable", "error")
-FAILURE_STATES = ("timeout", "unreachable", "error")
-FORMULA_PREFIXES = ("=", "+", "-", "@")
-PORT_FIELDS = ("port", "proto", "state", "latency_ms", "error")
-CSV_FIELDS = [
-    "scan_id", "command", "target", "host_ip", "host_mac", "arp_rtt_ms", "port", "proto",
-    "state", "latency_ms", "error", "started_at", "finished_at", "record_type", "status",
-    "total_probes", "open_count", "closed_count", "timeout_count", "unreachable_count",
-    "error_count", "schema_version",
-]
-
-
-def build_payload(
-    command: str,
-    inputs: dict[str, Any],
-    hosts: list[Host],
-    ports: list[PortResult],
-    *,
-    started_at: str | None = None,
-    probe_summaries: dict[str, dict[str, int]] | None = None,
-) -> Payload:
-    """Build the stable report shared by every renderer."""
-    grouped: defaultdict[str, list[PortResult]] = defaultdict(list)
-    for result in ports:
-        grouped[result.host].append(result)
-    finished_at = datetime.now(timezone.utc).isoformat()
-    payload: Payload = {
-        "schema_version": SCHEMA_VERSION,
-        "tool": "Arpticuno",
-        "version": __version__,
-        "scan_id": str(uuid4()),
-        "command": command,
-        "started_at": started_at or finished_at,
-        "finished_at": finished_at,
-        "inputs": inputs,
-        "hosts": [_host_payload(host, grouped[host.ip], probe_summaries) for host in hosts],
-    }
-    payload["status"] = scan_status(payload)
-    return payload
-
-
-def _host_payload(
-    host: Host, results: list[PortResult], summaries: dict[str, dict[str, int]] | None
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "ip": host.ip,
-        "mac": host.mac,
-        "arp_rtt_ms": host.rtt_ms,
-        "ports": [{field: getattr(result, field) for field in PORT_FIELDS} for result in results],
-    }
-    if summaries is not None:
-        if host.ip in summaries:
-            payload["probe_summary"] = summaries[host.ip]
-        payload["probe_summary"] = _summary(payload)
-    return payload
-
-
+TOP_ART = r'''      db                           mm     db
+     ;MM:                          MM
+    ,V^MM.    `7Mb,od8 `7MMpdMAo.mmMMmm `7MM  ,p6"bo `7MM  `7MM  `7MMpMMMb.  ,pW"Wq.
+   ,M  `MM      MM' "'   MM   `Wb  MM     MM 6M'  OO   MM    MM    MM    MM 6W'   `Wb
+   AbmmmqMA     MM       MM    M8  MM     MM 8M        MM    MM    MM    MM 8M     M8
+  A'     VML    MM       MM   ,AP  MM     MM YM.    ,  MM    MM    MM    MM YA.   ,A9
+.AMA.   .AMMA..JMML.     MMbmmd'   `Mbmo.JMML.YMbmd'   `Mbod"YML..JMML  JMML.`Ybmd9'
+                         MM
+                       .JMML.'''
+BANNER = "+--------------------------+\n|  Del Risco Technologies  |\n+--------------------------+"
+CSV_FIELDS = ["scan_id", "command", "target", "host_ip", "host_mac", "arp_rtt_ms", "port", "proto", "state", "latency_ms", "error", "started_at", "finished_at", "record_type", "status", "total_probes", "open_count", "closed_count", "timeout_count", "unreachable_count", "error_count", "schema_version"]
+FAILURES = ("timeout", "unreachable", "error")
+def branding() -> str:
+    width = max(map(len, TOP_ART.splitlines()))
+    banner = "\n".join(line.center(width).rstrip() for line in BANNER.splitlines())
+    return f"{TOP_ART}\n\n{banner}\n\n"
 def _summary(host: dict[str, Any]) -> dict[str, int]:
-    supplied = host.get("probe_summary")
-    if isinstance(supplied, Mapping):
-        counts = Counter({state: max(0, int(supplied.get(state, 0))) for state in PROBE_STATES})
-        reported_total = max(0, int(supplied.get("total", 0)))
-    else:
-        states = (port.get("state") for port in host.get("ports", []))
-        counts = Counter(state if state in PROBE_STATES else "error" for state in states)
-        reported_total = 0
-    normalized = {state: counts[state] for state in PROBE_STATES}
-    return {"total": max(reported_total, sum(normalized.values())), **normalized}
-
-
-def _failure_count(summary: Mapping[str, int]) -> int:
-    return sum(summary.get(state, 0) for state in FAILURE_STATES)
-
-
-def scan_status(payload: Payload) -> str:
+    supplied = host.get("probe_summary", {})
+    counts = {state: max(0, int(supplied.get(state, 0))) for state in STATES}
+    return {"total": max(int(supplied.get("total", 0)), sum(counts.values())), **counts}
+def scan_status(payload: dict[str, Any]) -> str:
     hosts = payload.get("hosts", [])
     if not hosts:
         return "no-arp-responders"
     summaries = [_summary(host) for host in hosts]
-    if all(summary["total"] and _failure_count(summary) == summary["total"] for summary in summaries):
+    failed = lambda summary: sum(summary[state] for state in FAILURES)
+    if all(summary["total"] and failed(summary) == summary["total"] for summary in summaries):
         return "inconclusive"
-    if any(_failure_count(summary) for summary in summaries):
+    if any(failed(summary) for summary in summaries):
         return "partial"
     return "completed" if any(summary["open"] for summary in summaries) else "no-open-ports"
-
-
-def is_inconclusive(payload: Payload) -> bool:
-    return scan_status(payload) == "inconclusive"
-
-
-def render_json(payload: Payload) -> str:
-    return json.dumps(payload, indent=2, allow_nan=False)
-
-
-def render_table(payload: Payload) -> str:
+def build_payload(
+    target: str, ports_text: str, arp_timeout: float, iface: str | None, retries: int,
+    connect_timeout: float, workers: int, hosts: list[Host], ports: list[PortResult],
+    summaries: dict[str, dict[str, int]], started: str,
+) -> dict[str, Any]:
+    grouped: defaultdict[str, list[PortResult]] = defaultdict(list)
+    for result in ports:
+        grouped[result.host].append(result)
+    host_data = []
+    for host in hosts:
+        host_data.append({
+            "ip": host.ip, "mac": host.mac, "arp_rtt_ms": host.rtt_ms,
+            "ports": [
+                {"port": item.port, "proto": "tcp", "state": item.state, "latency_ms": item.latency_ms, "error": None}
+                for item in grouped[host.ip]
+            ],
+            "probe_summary": summaries.get(host.ip, {"total": 0, **dict.fromkeys(STATES, 0)}),
+        })
+    payload = {
+        "schema_version": "1.0", "tool": "Arpticuno", "version": __version__, "scan_id": str(uuid4()),
+        "command": "scan", "started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(),
+        "inputs": {"target": target, "ports": ports_text, "arp_timeout": arp_timeout, "iface": iface,
+                   "retries": retries, "connect_timeout": connect_timeout, "workers": workers},
+        "hosts": host_data,
+    }
+    payload["status"] = scan_status(payload)
+    return payload
+def render_table(payload: dict[str, Any]) -> str:
     hosts = payload.get("hosts", [])
-    target = str(payload.get("inputs", {}).get("target", ""))
-    total_probes = sum(_summary(host)["total"] for host in hosts)
-    open_count = sum(port.get("state") == "open" for host in hosts for port in host.get("ports", []))
+    total = sum(_summary(host)["total"] for host in hosts)
+    opened = sum(len(host.get("ports", [])) for host in hosts)
     lines = [
-        (
-            f"Results: Target(s): {target or '-'} | ARP responders: {len(hosts)} | "
-            f"TCP probes: {total_probes} | Open TCP ports: {open_count}"
-        ),
-        f"Status: {scan_status(payload)}",
-        "",
-        "ARP responders:",
+        f"Results: Target(s): {payload.get('inputs', {}).get('target') or '-'} | ARP responders: {len(hosts)} | TCP probes: {total} | Open TCP ports: {opened}",
+        f"Status: {scan_status(payload)}", "", "ARP responders:",
     ]
     if not hosts:
         lines.append("  No ARP responders found.")
     for index, host in enumerate(hosts, 1):
         if index > 1:
             lines.append("")
-        lines.extend(_host_lines(index, host))
+        summary = _summary(host)
+        failures = sum(summary[state] for state in FAILURES)
+        lines += [f"  Host {index}", f"    IPv4: {host['ip']}", f"    MAC: {host.get('mac') or 'unknown'}",
+                  f"    ARP RTT: {host.get('arp_rtt_ms') if host.get('arp_rtt_ms') is not None else '-'} ms",
+                  f"    TCP Probes: {summary['total']}", f"    Open TCP Ports: {len(host.get('ports', []))}"]
+        if failures:
+            lines.append(f"    Probe Warning: {failures} probes timed out, were unreachable, or failed.")
+        lines += [f"      Port: {port['port']}/{port['proto']} | State: {port['state']} | Latency: {port.get('latency_ms', '-')} ms" for port in host.get("ports", [])]
+        if not host.get("ports"):
+            message = "No conclusive TCP port result was obtained for this host." if summary["total"] and failures == summary["total"] else "No open TCP ports found on this host."
+            lines.append(f"      {message}")
     return "\n".join(lines) + "\n"
-
-
-def _host_lines(index: int, host: dict[str, Any]) -> list[str]:
-    summary = _summary(host)
-    failures = _failure_count(summary)
-    open_ports = [port for port in host.get("ports", []) if port.get("state") == "open"]
-    lines = [
-        f"  Host {index}",
-        f"    IPv4: {host['ip']}",
-        f"    MAC: {host.get('mac') or 'unknown'}",
-        f"    ARP RTT: {_display(host.get('arp_rtt_ms'))} ms",
-        f"    TCP Probes: {summary['total']}",
-        f"    Open TCP Ports: {len(open_ports)}",
-    ]
-    if failures:
-        lines.append(f"    Probe Warning: {failures} probes timed out, were unreachable, or failed.")
-    lines.extend(
-        f"      Port: {port['port']}/{port['proto']} | State: {port['state']} | "
-        f"Latency: {_display(port.get('latency_ms'))} ms"
-        for port in open_ports
-    )
-    if not open_ports:
-        message = (
-            "No conclusive TCP port result was obtained for this host."
-            if summary["total"] and failures == summary["total"]
-            else "No open TCP ports found on this host."
-        )
-        lines.append(f"      {message}")
-    return lines
-
-
-def render_csv(payload: Payload) -> str:
-    buffer = StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, lineterminator="\n")
-    writer.writeheader()
-    for host in payload.get("hosts", []) or (None,):
-        ports = host.get("ports", []) or (None,) if host is not None else (None,)
-        for port in ports:
-            row = _csv_row(payload, host, port)
-            writer.writerow({key: _csv_safe(value) for key, value in row.items()})
-    return buffer.getvalue()
-
-
-def _csv_row(
-    payload: Payload, host: dict[str, Any] | None, port: dict[str, Any] | None
-) -> dict[str, Any]:
-    row: dict[str, Any] = {
-        "schema_version": payload.get("schema_version", SCHEMA_VERSION),
-        "scan_id": payload["scan_id"],
-        "command": payload["command"],
-        "target": str(payload.get("inputs", {}).get("target", "")),
-        "started_at": payload.get("started_at", ""),
-        "finished_at": payload.get("finished_at", ""),
-    }
-    if host is None:
-        return row | {"record_type": "scan", "status": scan_status(payload)}
-
-    summary = _summary(host)
-    failures = _failure_count(summary)
-    status = (
-        "probe-failure" if summary["total"] and failures == summary["total"]
-        else "partial-probe-failure" if failures
-        else "completed" if summary["open"]
-        else "no-open-ports" if summary["total"]
-        else "not-scanned"
-    )
-    row.update(
-        host_ip=host["ip"],
-        host_mac=host.get("mac") or "",
-        arp_rtt_ms=_display(host.get("arp_rtt_ms"), ""),
-        record_type="host" if port is None else "port",
-        status=status,
-        total_probes=summary["total"],
-        **{f"{state}_count": summary[state] for state in PROBE_STATES},
-    )
-    if port is not None:
-        row.update({field: _display(port.get(field), "") for field in PORT_FIELDS})
-    return row
-
-
 def _csv_safe(value: Any) -> Any:
     if not isinstance(value, str) or not value:
         return value
-    first = next(
-        (index for index, char in enumerate(value) if not char.isspace() and not unicodedata.category(char).startswith("C")),
-        len(value),
-    )
-    leading_control = any(unicodedata.category(char).startswith("C") for char in value[:first])
-    return f"'{value}" if leading_control or value[first:].startswith(FORMULA_PREFIXES) else value
-
-
-def _display(value: Any, empty: str = "-") -> str:
-    return empty if value is None else str(value)
+    index = next((i for i, char in enumerate(value) if not char.isspace() and not unicodedata.category(char).startswith("C")), len(value))
+    unsafe = any(unicodedata.category(char).startswith("C") for char in value[:index]) or value[index:].startswith(("=", "+", "-", "@"))
+    return f"'{value}" if unsafe else value
+def render_csv(payload: dict[str, Any]) -> str:
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    hosts = payload.get("hosts", [])
+    for host in hosts or [None]:
+        for port in (host.get("ports", []) or [None]) if host else [None]:
+            row = {"schema_version": payload["schema_version"], "scan_id": payload["scan_id"], "command": payload["command"], "target": payload["inputs"]["target"], "started_at": payload["started_at"], "finished_at": payload["finished_at"]}
+            if host is None:
+                row |= {"record_type": "scan", "status": scan_status(payload)}
+            else:
+                summary = _summary(host)
+                failed = sum(summary[state] for state in FAILURES)
+                status = "probe-failure" if summary["total"] and failed == summary["total"] else "partial-probe-failure" if failed else "completed" if summary["open"] else "no-open-ports" if summary["total"] else "not-scanned"
+                row |= {"host_ip": host["ip"], "host_mac": host.get("mac") or "", "arp_rtt_ms": host.get("arp_rtt_ms") if host.get("arp_rtt_ms") is not None else "", "record_type": "host" if port is None else "port", "status": status, "total_probes": summary["total"], **{f"{state}_count": summary[state] for state in STATES}}
+                if port:
+                    row |= {key: port.get(key, "") for key in ("port", "proto", "state", "latency_ms", "error")}
+            writer.writerow({key: _csv_safe(value) for key, value in row.items()})
+    return buffer.getvalue()
+def render(payload: dict[str, Any], fmt: str) -> str:
+    return json.dumps(payload, indent=2, allow_nan=False) + "\n" if fmt == "json" else render_csv(payload) if fmt == "csv" else render_table(payload)

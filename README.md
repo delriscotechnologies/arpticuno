@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/arpticuno-logo.png" alt="Arpticuno" width="420">
+  <img src="assets/arpticuno-logo.jpg" alt="Arpticuno" width="420">
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@ Arpticuno is a small Python CLI for discovering IPv4 hosts on a local private or
 
 ## Install
 
-You need Python 3.10 or newer. ARP discovery also requires permission to send and receive layer-2 packets on the selected interface. On Linux, run the scanner with the required elevated privileges; on Windows, use an Administrator terminal.
+You need Python 3.10 or newer. ARP discovery also requires permission to send and receive layer-2 packets on the selected interface. On Linux, run the scanner with the required elevated privileges. On Windows, install Npcap with **WinPcap API-compatible Mode disabled** and use an Administrator terminal.
 
 Clone the repository, create a virtual environment, and install the command:
 
@@ -32,7 +32,7 @@ Run an authorized scan on Linux:
 sudo .venv/bin/arpticuno scan 192.168.1.0/24 --ports 22,80,443
 ```
 
-On Windows, activate the environment with `.\.venv\Scripts\Activate.ps1`, run the same installation command, and start `arpticuno scan` from an Administrator terminal.
+On Windows, activate the environment with `.\.venv\Scripts\Activate.ps1`, run the same installation command, and start `arpticuno scan` from an Administrator terminal. See Scapy's [Windows installation instructions](https://scapy.readthedocs.io/en/latest/installation.html#windows) for Npcap details.
 
 ## What it does
 
@@ -139,4 +139,4 @@ See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 
 ## License
 
-Arpticuno is released under the [MIT License](LICENSE).
+Arpticuno is released under the [MIT License](LICENSE). Its Scapy dependency is distributed under GPL-2.0-only; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
