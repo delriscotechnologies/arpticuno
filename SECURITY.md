@@ -12,9 +12,7 @@ Include the affected version, reproduction steps, impact, and suggested mitigati
 
 ## Intended scope
 
-The Arpticuno CLI and batch scan APIs accept private or link-local IPv4 LAN targets. Public IPv4 addresses, hostnames, IPv6, loopback addresses, malformed ARP replies, and replies outside the requested scope are rejected by the relevant validation paths.
-
-`probe_connect()` is a low-level socket helper and does not enforce target authorization or LAN scope by itself. Applications calling it directly are responsible for validating their targets.
+The Arpticuno CLI accepts private or link-local IPv4 LAN targets. Public IPv4 addresses, hostnames, IPv6, loopback addresses, malformed ARP replies, and replies outside the requested scope are rejected by the relevant validation paths.
 
 The implementation bounds target count, total address scope, total ARP requests, discovered hosts, worker count, timeouts, and total TCP probes to reduce accidental resource exhaustion.
 
@@ -24,8 +22,8 @@ ARP is unauthenticated. A matching reply means only that a response was observed
 
 ## Privileged execution
 
-Raw ARP access may require elevated privileges. When elevated execution is necessary, use the virtual-environment executable directly and choose trusted output locations.
+Raw ARP access may require elevated privileges. When elevated execution is necessary, use the virtual-environment executable directly and choose trusted output locations. File output rejects directories and symbolic links and creates new files with mode `0600` on POSIX systems.
 
 ## Dependencies
 
-The runtime Scapy dependency is pinned exactly in `pyproject.toml`. End-user installation with `pip install .` uses that project configuration directly.
+The runtime Scapy dependency and development security tools are pinned exactly in `pyproject.toml`. Scapy is GPL-2.0-only; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Automated checks audit dependencies, static analysis, CodeQL results, filesystem findings, and the generated SBOM.
