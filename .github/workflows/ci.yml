@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   quality:
-    name: Python ${{ matrix.python }}
-    runs-on: ubuntu-latest
+    name: Windows / Python ${{ matrix.python }}
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +49,8 @@ jobs:
       - name: Network-free smoke checks
         shell: bash
         run: |
+          python -c "import sys; assert sys.platform == 'win32'"
+          python -c "import ctypes; assert ctypes.WinDLL('iphlpapi').SendARP"
           arpticuno --version
           diff <(awk '/^```text$/{capture=1; next} capture && /^```$/{exit} capture{print}' README.md) <(python -m arpticuno.sandbox)
           python -m arpticuno.sandbox --format json | python -m json.tool >/dev/null

@@ -7,8 +7,6 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scapy.error import Scapy_Exception
-
 from arpticuno import __version__
 from arpticuno.reporting import branding, build_payload, render, scan_status
 from arpticuno.scanner import discover, parse_ports, scan
@@ -17,14 +15,14 @@ DEFAULT_PORTS, DEFAULT_TIMEOUT, DEFAULT_WORKERS, INCONCLUSIVE_EXIT = range(1, 70
 AUTH_NOTICE = "Use only on systems and networks you own or have explicit permission to test."
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="arpticuno", description="Focused IPv4 LAN ARP discovery and TCP connect scanning.",
+        prog="arpticuno", description="Windows IPv4 LAN ARP discovery and TCP connect scanning.",
         epilog=f"Authorization notice: {AUTH_NOTICE}",
     )
     parser.add_argument("--version", action="version", version=f"Arpticuno {__version__}")
     command = parser.add_subparsers(dest="command", required=True).add_parser("scan", help="Discover LAN hosts and scan selected TCP ports")
     command.add_argument("target", help="IPv4 host, CIDR, or comma-separated targets")
-    command.add_argument("--iface", help="Interface used for ARP, e.g. eth0")
-    command.add_argument("--arp-timeout", type=float, default=1.0, help="ARP timeout in seconds")
+    command.add_argument("--iface", help="Local IPv4 address used to select a Windows interface")
+    command.add_argument("--arp-timeout", type=float, default=1.0, help="Compatibility value; Windows controls ARP timeout")
     command.add_argument("--retries", type=int, default=0, help="Retries for unanswered ARP requests")
     command.add_argument("--ports", help="TCP ports or ranges (default: 1-7000)")
     command.add_argument("--connect-timeout", type=float, default=DEFAULT_TIMEOUT)
@@ -42,11 +40,6 @@ def _write(path_text: str, content: str) -> None:
     descriptor = os.open(path, flags, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
         stream.write(content)
-def _friendly(exc: Exception) -> str:
-    message = str(exc).strip() or exc.__class__.__name__
-    if sys.platform.startswith("win") and any(word in message.lower() for word in ("npcap", "winpcap", "libpcap", "pcap", "layer 2 sockets")):
-        return "Npcap is unavailable. Install Npcap with WinPcap compatibility mode disabled, then try again."
-    return message
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
@@ -69,6 +62,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (TypeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    except (ImportError, OSError, RuntimeError, Scapy_Exception) as exc:
-        print(f"error: {_friendly(exc)}", file=sys.stderr)
+    except (ImportError, OSError, RuntimeError) as exc:
+        print(f"error: {str(exc).strip() or exc.__class__.__name__}", file=sys.stderr)
         return 1

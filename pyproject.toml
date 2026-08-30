@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "arpticuno"
-version = "0.1.0"
-description = "Focused IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
+version = "0.2.0"
+description = "Windows IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -13,9 +13,8 @@ license-files = ["LICENSE"]
 authors = [
   { name = "Cristian Del Risco" }
 ]
-dependencies = [
-  "scapy==2.7.0"
-]
+classifiers = ["Operating System :: Microsoft :: Windows"]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
