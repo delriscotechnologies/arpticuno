@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "arpticuno"
-version = "0.2.0"
-description = "Windows IPv4 LAN ARP discovery and TCP connect scanner for authorized environments."
+version = "0.3.0"
+description = "Windows IPv4 LAN neighbor discovery and TCP connect scanner for authorized environments."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
