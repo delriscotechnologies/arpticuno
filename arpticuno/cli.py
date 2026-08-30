@@ -15,15 +15,14 @@ DEFAULT_PORTS, DEFAULT_TIMEOUT, DEFAULT_WORKERS, INCONCLUSIVE_EXIT = range(1, 70
 AUTH_NOTICE = "Use only on systems and networks you own or have explicit permission to test."
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="arpticuno", description="Windows IPv4 LAN ARP discovery and TCP connect scanning.",
+        prog="arpticuno", description="Windows IPv4 LAN neighbor discovery and TCP connect scanning.",
         epilog=f"Authorization notice: {AUTH_NOTICE}",
     )
     parser.add_argument("--version", action="version", version=f"Arpticuno {__version__}")
     command = parser.add_subparsers(dest="command", required=True).add_parser("scan", help="Discover LAN hosts and scan selected TCP ports")
     command.add_argument("target", help="IPv4 host, CIDR, or comma-separated targets")
     command.add_argument("--iface", help="Local IPv4 address used to select a Windows interface")
-    command.add_argument("--arp-timeout", type=float, default=1.0, help="Compatibility value; Windows controls ARP timeout")
-    command.add_argument("--retries", type=int, default=0, help="Retries for unanswered ARP requests")
+    command.add_argument("--retries", type=int, default=0, help="Retries after an unsuccessful address resolution")
     command.add_argument("--ports", help="TCP ports or ranges (default: 1-7000)")
     command.add_argument("--connect-timeout", type=float, default=DEFAULT_TIMEOUT)
     command.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
@@ -45,10 +44,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = build_parser().parse_args(argv)
         ports = parse_ports(args.ports) if args.ports is not None else DEFAULT_PORTS
         started = datetime.now(timezone.utc).isoformat()
-        hosts = discover(args.target, args.iface, args.arp_timeout, args.retries)
+        hosts = discover(args.target, args.iface, args.retries)
         open_ports, summaries = scan([host.ip for host in hosts], ports, args.connect_timeout, args.workers)
         payload = build_payload(
-            args.target, args.ports or "1-7000", args.arp_timeout, args.iface, args.retries,
+            args.target, args.ports or "1-7000", args.iface, args.retries,
             args.connect_timeout, args.workers, hosts, open_ports, summaries, started,
         )
         output = render(payload, args.format)
