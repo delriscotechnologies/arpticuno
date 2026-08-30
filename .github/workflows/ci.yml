@@ -52,7 +52,7 @@ jobs:
           python -c "import sys; assert sys.platform == 'win32'"
           python -c "import ctypes; assert ctypes.WinDLL('iphlpapi').SendARP"
           arpticuno --version
-          diff <(awk '/^```text$/{capture=1; next} capture && /^```$/{exit} capture{print}' README.md) <(python -m arpticuno.sandbox)
+          diff --strip-trailing-cr <(awk '/^```text$/{capture=1; next} capture && /^```$/{exit} capture{print}' README.md) <(python -m arpticuno.sandbox)
           python -m arpticuno.sandbox --format json | python -m json.tool >/dev/null
           python -m arpticuno.sandbox --format csv >/dev/null
           if arpticuno scan 8.8.8.8 --ports 53 --no-banner; then exit 1; fi
