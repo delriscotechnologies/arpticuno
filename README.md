@@ -8,42 +8,40 @@
 
 ---
 
-Arpticuno is a small Python CLI for discovering IPv4 hosts on a local private or link-local network and reporting selected TCP connectivity results. It is intentionally limited in scope and does not include advanced scanning, fingerprinting, exploitation, or evasion features.
+Arpticuno is a small Windows Python CLI for discovering IPv4 hosts on a local private or link-local network and reporting selected TCP connectivity results. It is intentionally limited in scope and does not include advanced scanning, fingerprinting, exploitation, or evasion features.
 
 > Use Arpticuno only on systems and networks you own or have explicit permission to test.
 
 ## Install
 
-You need Python 3.10 or newer. ARP discovery also requires permission to send and receive layer-2 packets on the selected interface. On Linux, run the scanner with the required elevated privileges. On Windows, install Npcap with **WinPcap API-compatible Mode disabled** and use an Administrator terminal.
+You need Windows and Python 3.10 or newer. Arpticuno uses the Windows IP Helper API directly, so Scapy, Npcap, and Administrator privileges are not required.
 
 Clone the repository, create a virtual environment, and install the command:
 
-```bash
+```powershell
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
-python -m venv .venv
-source .venv/bin/activate
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install .
 ```
 
-Run an authorized scan on Linux:
+Run an authorized scan:
 
-```bash
-sudo .venv/bin/arpticuno scan 192.168.1.0/24 --ports 22,80,443
+```powershell
+arpticuno scan 192.168.1.0/24 --ports 22,80,443
 ```
-
-On Windows, activate the environment with `.\.venv\Scripts\Activate.ps1`, run the same installation command, and start `arpticuno scan` from an Administrator terminal. See Scapy's [Windows installation instructions](https://scapy.readthedocs.io/en/latest/installation.html#windows) for Npcap details.
 
 ## What it does
 
 Arpticuno:
 
-1. Validates private or link-local IPv4 targets that are directly connected to the selected interface.
-2. Records valid ARP replies within the requested scope.
+1. Validates private or link-local IPv4 targets.
+2. Uses Windows `SendARP` calls in parallel to resolve responding IPv4 addresses and MAC addresses.
 3. Checks selected TCP ports with normal socket connections.
 4. Produces table, JSON, or CSV output.
 
-The default TCP selection is ports `1-7000`. The CLI also supports custom port selections, worker counts, connection timeouts, output files, and banner suppression. With `--fail-on-inconclusive`, the command returns exit code `3` when every TCP probe fails.
+The default TCP selection is ports `1-7000`. The CLI also supports custom port selections, worker counts, connection timeouts, output files, and banner suppression. `--iface` accepts a local source IPv4 address when Windows should use a specific interface. With `--fail-on-inconclusive`, the command returns exit code `3` when every TCP probe fails.
 
 ## Output
 
@@ -113,7 +111,7 @@ ARP responders:
 
 ## Scope and limits
 
-Arpticuno is restricted to private or link-local IPv4 targets on a directly connected LAN and to TCP connect scanning. Private networks reached through a router are outside the ARP discovery scope.
+Arpticuno is restricted to Windows, private or link-local IPv4 targets on a directly connected LAN, and TCP connect scanning. Windows `SendARP` resolves physical addresses only for destinations on the local subnet.
 
 The implementation enforces these safety limits:
 
@@ -133,10 +131,10 @@ ARP requests are calculated as `target addresses × (retries + 1)`. A target tha
 
 ARP is unauthenticated. An observed reply does not prove device identity or ownership. If conflicting MAC addresses are observed for one IPv4 address, the MAC is reported as unknown.
 
-Scapy requires elevated privileges to send ARP packets. Grant only the minimum permissions required by your operating system, and do not run package installation commands with elevated privileges.
+The Windows API controls the timeout of each native ARP request. The `--arp-timeout` value is retained for report-schema and command-line compatibility but cannot override that operating-system timeout. Reported ARP RTT is the elapsed `SendARP` call time and may reflect a cached neighbor-table result.
 
 See [SECURITY.md](SECURITY.md) for the security and trust-boundary notes.
 
 ## License
 
-Arpticuno is released under the [MIT License](LICENSE). Its Scapy dependency is distributed under GPL-2.0-only; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Arpticuno is released under the [MIT License](LICENSE).

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import ctypes
 import errno
 import ipaddress
 import math
-import re
 import socket
-from collections.abc import Sequence
+import struct
+import sys
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from ctypes import wintypes
 from dataclasses import dataclass
 from time import perf_counter
 
@@ -16,7 +19,6 @@ LOCAL_RANGES = tuple(
     ipaddress.IPv4Network(cidr)
     for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
 )
-MAC = re.compile(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
 @dataclass(frozen=True)
 class Host:
     ip: str
@@ -63,44 +65,48 @@ def _targets(text: str) -> list[ipaddress.IPv4Network]:
     if sum(network.num_addresses for network in collapsed) > MAX_ARP_TARGETS:
         raise ValueError("Target list is too large for safe LAN ARP discovery. Use /16 or narrower.")
     return collapsed
+def _arp(send: Callable[..., int], address: str, source: int, retries: int) -> Host | None:
+    best: Host | None = None
+    conflict = False
+    destination = struct.unpack("=I", socket.inet_aton(address))[0]
+    for _ in range(retries + 1):
+        mac, length, started = (ctypes.c_ubyte * 6)(), wintypes.ULONG(6), perf_counter()
+        status = send(destination, source, mac, ctypes.byref(length))
+        elapsed = round((perf_counter() - started) * 1000, 2)
+        if status or length.value != 6:
+            continue
+        value = ":".join(f"{byte:02x}" for byte in mac)
+        conflict = conflict or best is not None and best.mac != value
+        if best is None or elapsed < (best.rtt_ms or math.inf):
+            best = Host(address, value, elapsed)
+    return Host(address, None, best.rtt_ms) if best and conflict else best
 def discover(target: str, iface: str | None, timeout: float, retries: int) -> list[Host]:
-    timeout = _finite(timeout, "ARP timeout")
+    _finite(timeout, "ARP timeout")
+    if sys.platform != "win32":
+        raise OSError("Arpticuno supports Windows only")
     if isinstance(retries, bool) or not isinstance(retries, int) or not 0 <= retries <= MAX_ARP_RETRIES:
         raise ValueError(f"Retries must be an integer between 0 and {MAX_ARP_RETRIES}")
     networks = _targets(target)
     requests = sum(network.num_addresses for network in networks) * (retries + 1)
     if requests > MAX_ARP_REQUESTS:
         raise ValueError(f"ARP discovery could send {requests:,} requests; the limit is {MAX_ARP_REQUESTS:,}")
-    from scapy.all import ARP, Ether, conf, srp  # type: ignore
-    found: dict[str, Host] = {}
-    conflicts: set[str] = set()
-    for network in networks:
-        interface, _, gateway = conf.route.route(str(network.network_address), dev=iface, verbose=0)
-        if gateway is not None and int(ipaddress.IPv4Address(gateway)):
-            raise ValueError(f"ARP target {network} is not directly connected to interface {iface or interface}")
-        packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(network))
-        answered, _ = srp(packet, iface=iface or interface, timeout=timeout, retry=retries, multi=True, verbose=False)
-        for request, reply in answered:
-            try:
-                address = ipaddress.ip_address(str(reply.psrc))
-                mac = str(reply.hwsrc).strip().lower()
-            except (AttributeError, ValueError):
-                continue
-            if not isinstance(address, ipaddress.IPv4Address) or address not in network or not MAC.fullmatch(mac):
-                continue
-            ip, previous = str(address), found.get(str(address))
-            if previous and previous.mac != mac or ip in conflicts:
-                conflicts.add(ip)
-            try:
-                elapsed = (float(str(reply.time)) - float(str(request.sent_time))) * 1000
-                rtt = round(elapsed, 2) if math.isfinite(elapsed) and elapsed >= 0 else None
-            except (AttributeError, TypeError, ValueError):
-                rtt = None
-            valid_rtts = [value for value in (previous.rtt_ms if previous else None, rtt) if value is not None]
-            found[ip] = Host(ip, None if ip in conflicts else mac, min(valid_rtts) if valid_rtts else None)
+    source_ip = None if iface is None else _local_host(iface)
+    if source_ip:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as check:
+            check.bind((source_ip, 0))
+    source = 0 if source_ip is None else struct.unpack("=I", socket.inet_aton(source_ip))[0]
+    library = ctypes.WinDLL("iphlpapi")  # type: ignore[attr-defined]
+    send = library.SendARP
+    send.argtypes = (wintypes.ULONG, wintypes.ULONG, ctypes.c_void_p, ctypes.POINTER(wintypes.ULONG))
+    send.restype = wintypes.DWORD
+    addresses = [str(address) for network in networks for address in network]
+    found = []
+    with ThreadPoolExecutor(max_workers=min(MAX_HOSTS, len(addresses))) as pool:
+        for start in range(0, len(addresses), MAX_HOSTS * 2):
+            found += [host for host in pool.map(lambda ip: _arp(send, ip, source, retries), addresses[start:start + MAX_HOSTS * 2]) if host]
             if len(found) > MAX_HOSTS:
                 raise ValueError(f"ARP discovery returned more than {MAX_HOSTS} hosts")
-    return [found[ip] for ip in sorted(found, key=ipaddress.ip_address)]
+    return found
 def parse_ports(text: str) -> list[int]:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Ports must be non-empty text")
