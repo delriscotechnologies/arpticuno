@@ -6,24 +6,24 @@ Security fixes are applied to the latest version on the `main` branch.
 
 ## Reporting a vulnerability
 
-Use GitHub private vulnerability reporting from the repository's **Security** tab. Do not place credentials, private network details, unrelated packet captures, or sensitive reproduction material in a public issue.
+Use the repository's **Security** tab and **Report a vulnerability** when that option is available. If it is unavailable, open a minimal public issue requesting a private reporting channel and do not include sensitive details.
 
-Include the affected version, reproduction steps, impact, and suggested mitigation. Any testing must use systems and networks you own or have explicit permission to test.
+Include the affected version, reproduction steps, impact, and suggested mitigation. Test only systems and networks you own or have explicit permission to test.
 
 ## Intended scope
 
-The Windows-only Arpticuno CLI accepts private or link-local IPv4 LAN targets. Public IPv4 addresses, hostnames, IPv6, and loopback addresses are rejected by the relevant validation paths. Windows `SendARP` resolves MAC addresses only for destinations on the local subnet.
+Arpticuno accepts RFC1918 private or IPv4 link-local targets. Public IPv4 addresses, hostnames, IPv6, and loopback addresses are rejected. Physical-address resolution is limited to destinations on the local subnet.
 
-The implementation bounds target count, total address scope, total ARP requests, discovered hosts, worker count, timeouts, and total TCP probes to reduce accidental resource exhaustion.
+The implementation bounds target count, worst-case `SendARP` calls, resolved hosts, worker count, TCP timeout, and total TCP probes.
 
-## ARP trust boundary
+## Resolution trust boundary
 
-ARP is unauthenticated. A matching reply means only that a response was observed; it does not prove device identity or ownership. If retries return different MAC addresses for one IPv4 address, Arpticuno reports the MAC as unknown.
+ARP is unauthenticated. A resolved IPv4-to-MAC mapping does not prove device identity or ownership and may come from the local ARP table.
 
-## Native API and output files
+## Output files
 
-ARP discovery uses the Windows IP Helper API and does not require raw-packet access, Scapy, Npcap, or Administrator privileges. File output rejects directories and symbolic links.
+File output rejects directories and symbolic links.
 
 ## Dependencies
 
-Arpticuno has no third-party runtime dependencies. Development security tools are pinned exactly in `pyproject.toml`. Automated checks audit dependencies, static analysis, CodeQL results, filesystem findings, and the generated SBOM.
+Arpticuno has no third-party runtime dependencies. Development tools are pinned in `pyproject.toml`. Automated checks cover static analysis, dependency auditing, CodeQL, repository scanning, and a dependency SBOM.

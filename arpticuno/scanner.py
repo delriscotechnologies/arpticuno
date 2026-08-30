@@ -13,7 +13,7 @@ from ctypes import wintypes
 from dataclasses import dataclass
 from time import perf_counter
 
-MAX_ARP_TARGETS, MAX_ARP_REQUESTS, MAX_TARGET_ENTRIES, MAX_HOSTS, MAX_ARP_RETRIES, MAX_TIMEOUT, MAX_WORKERS, MAX_PROBES = 65_536, 65_536, 256, 256, 5, 10.0, 512, 1_000_000
+MAX_TARGET_ADDRESSES, MAX_SENDARP_CALLS, MAX_TARGET_ENTRIES, MAX_HOSTS, MAX_ARP_RETRIES, MAX_TIMEOUT, MAX_WORKERS, MAX_PROBES = 65_536, 65_536, 256, 256, 5, 10.0, 512, 1_000_000
 STATES = ("open", "closed", "timeout", "unreachable", "error")
 LOCAL_RANGES = tuple(
     ipaddress.IPv4Network(cidr)
@@ -23,7 +23,7 @@ LOCAL_RANGES = tuple(
 class Host:
     ip: str
     mac: str | None = None
-    rtt_ms: float | None = None
+    resolve_ms: float | None = None
 @dataclass(frozen=True)
 class PortResult:
     host: str
@@ -44,7 +44,7 @@ def _local_host(value: str) -> str:
     if not isinstance(address, ipaddress.IPv4Address):
         raise TypeError("TCP scanning only supports IPv4 hosts")
     if not any(address in network for network in LOCAL_RANGES):
-        raise ValueError("TCP scanning is limited to private/link-local IPv4 LAN hosts")
+        raise ValueError("TCP scanning is limited to RFC1918/link-local IPv4 hosts")
     return str(address)
 def _targets(text: str) -> list[ipaddress.IPv4Network]:
     if not isinstance(text, str) or not text.strip():
@@ -59,37 +59,32 @@ def _targets(text: str) -> list[ipaddress.IPv4Network]:
         except ValueError as exc:
             raise ValueError(f"Invalid IPv4 target: {part}") from exc
         if not isinstance(network, ipaddress.IPv4Network) or not any(network.subnet_of(local) for local in LOCAL_RANGES):
-            raise ValueError("ARP discovery is limited to private/link-local IPv4 LAN ranges")
+            raise ValueError("Discovery is limited to RFC1918/link-local IPv4 ranges")
         networks.append(network)
     collapsed = list(ipaddress.collapse_addresses(networks))
-    if sum(network.num_addresses for network in collapsed) > MAX_ARP_TARGETS:
-        raise ValueError("Target list is too large for safe LAN ARP discovery. Use /16 or narrower.")
+    if sum(network.num_addresses for network in collapsed) > MAX_TARGET_ADDRESSES:
+        raise ValueError("Target list is too large for safe LAN discovery. Use /16 or narrower.")
     return collapsed
 def _arp(send: Callable[..., int], address: str, source: int, retries: int) -> Host | None:
-    best: Host | None = None
-    conflict = False
     destination = struct.unpack("=I", socket.inet_aton(address))[0]
     for _ in range(retries + 1):
-        mac, length, started = (ctypes.c_ubyte * 6)(), wintypes.ULONG(6), perf_counter()
+        mac, length, started = (wintypes.ULONG * 2)(), wintypes.ULONG(6), perf_counter()
         status = send(destination, source, mac, ctypes.byref(length))
         elapsed = round((perf_counter() - started) * 1000, 2)
         if status or length.value != 6:
             continue
-        value = ":".join(f"{byte:02x}" for byte in mac)
-        conflict = conflict or best is not None and best.mac != value
-        if best is None or elapsed < (best.rtt_ms or math.inf):
-            best = Host(address, value, elapsed)
-    return Host(address, None, best.rtt_ms) if best and conflict else best
-def discover(target: str, iface: str | None, timeout: float, retries: int) -> list[Host]:
-    _finite(timeout, "ARP timeout")
+        raw = ctypes.string_at(ctypes.addressof(mac), 6)
+        return Host(address, ":".join(f"{byte:02x}" for byte in raw), elapsed)
+    return None
+def discover(target: str, iface: str | None, retries: int) -> list[Host]:
     if sys.platform != "win32":
         raise OSError("Arpticuno supports Windows only")
     if isinstance(retries, bool) or not isinstance(retries, int) or not 0 <= retries <= MAX_ARP_RETRIES:
         raise ValueError(f"Retries must be an integer between 0 and {MAX_ARP_RETRIES}")
     networks = _targets(target)
-    requests = sum(network.num_addresses for network in networks) * (retries + 1)
-    if requests > MAX_ARP_REQUESTS:
-        raise ValueError(f"ARP discovery could send {requests:,} requests; the limit is {MAX_ARP_REQUESTS:,}")
+    calls = sum(network.num_addresses for network in networks) * (retries + 1)
+    if calls > MAX_SENDARP_CALLS:
+        raise ValueError(f"Discovery could make up to {calls:,} SendARP calls; the limit is {MAX_SENDARP_CALLS:,}")
     source_ip = None if iface is None else _local_host(iface)
     if source_ip:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as check:
@@ -105,7 +100,7 @@ def discover(target: str, iface: str | None, timeout: float, retries: int) -> li
         for start in range(0, len(addresses), MAX_HOSTS * 2):
             found += [host for host in pool.map(lambda ip: _arp(send, ip, source, retries), addresses[start:start + MAX_HOSTS * 2]) if host]
             if len(found) > MAX_HOSTS:
-                raise ValueError(f"ARP discovery returned more than {MAX_HOSTS} hosts")
+                raise ValueError(f"Discovery returned more than {MAX_HOSTS} hosts")
     return found
 def parse_ports(text: str) -> list[int]:
     if not isinstance(text, str) or not text.strip():
