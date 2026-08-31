@@ -26,4 +26,4 @@ File output rejects directories and symbolic links.
 
 ## Dependencies
 
-Arpticuno has no third-party runtime dependencies. Development tools are pinned in `pyproject.toml`. Automated checks cover static analysis, dependency auditing, CodeQL, repository scanning, and a dependency SBOM.
+Arpticuno has no third-party runtime dependencies.
