@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"Arpticuno {__version__}")
     command = parser.add_subparsers(dest="command", required=True).add_parser("scan", help="Discover LAN hosts and scan selected TCP ports")
     command.add_argument("target", help="IPv4 host, CIDR, or comma-separated targets")
-    command.add_argument("--iface", help="Local IPv4 address used to select a Windows interface")
+    command.add_argument("--iface", help="Local source IPv4 address for ARP and TCP connections")
     command.add_argument("--retries", type=int, default=0, help="Retries after an unsuccessful address resolution")
     command.add_argument("--ports", help="TCP ports or ranges (default: 1-7000)")
     command.add_argument("--connect-timeout", type=float, default=DEFAULT_TIMEOUT)
@@ -43,9 +43,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
         ports = parse_ports(args.ports) if args.ports is not None else DEFAULT_PORTS
+        scan([], ports, args.connect_timeout, args.workers, args.iface)
         started = datetime.now(timezone.utc).isoformat()
         hosts = discover(args.target, args.iface, args.retries)
-        open_ports, summaries = scan([host.ip for host in hosts], ports, args.connect_timeout, args.workers)
+        open_ports, summaries = scan([host.ip for host in hosts], ports, args.connect_timeout, args.workers, args.iface)
         payload = build_payload(
             args.target, args.ports or "1-7000", args.iface, args.retries,
             args.connect_timeout, args.workers, hosts, open_ports, summaries, started,

@@ -106,7 +106,7 @@ def parse_ports(text: str) -> list[int]:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Ports must be non-empty text")
     selected: set[int] = set()
-    for item in text.split(","):
+    for item in dict.fromkeys(text.split(",")):
         try:
             bounds = [int(value) for value in item.strip().split("-")]
         except ValueError as exc:
@@ -117,10 +117,10 @@ def parse_ports(text: str) -> list[int]:
             raise ValueError("Port range start must be less than or equal to end")
         selected.update(range(bounds[0], bounds[-1] + 1))
     return sorted(selected)
-def _probe(host: str, port: int, timeout: float) -> PortResult:
+def _probe(host: str, port: int, timeout: float, iface: str | None = None) -> PortResult:
     start = perf_counter()
     try:
-        with socket.create_connection((host, port), timeout=timeout):
+        with socket.create_connection((host, port), timeout=timeout, source_address=(iface, 0) if iface else None):
             state = "open"
     except TimeoutError:
         state = "timeout"
@@ -132,10 +132,11 @@ def _probe(host: str, port: int, timeout: float) -> PortResult:
             "unreachable" if code in {errno.EHOSTUNREACH, errno.ENETUNREACH, 10051, 10065} else "error"
         )
     return PortResult(host, port, state, round((perf_counter() - start) * 1000, 2))
-def scan(hosts: Sequence[str], ports: Sequence[int], timeout: float, workers: int) -> tuple[list[PortResult], dict[str, dict[str, int]]]:
+def scan(hosts: Sequence[str], ports: Sequence[int], timeout: float, workers: int, iface: str | None = None) -> tuple[list[PortResult], dict[str, dict[str, int]]]:
     timeout = _finite(timeout, "TCP connect timeout")
     if isinstance(workers, bool) or not isinstance(workers, int) or not 1 <= workers <= MAX_WORKERS:
         raise ValueError(f"Workers must be an integer between 1 and {MAX_WORKERS}")
+    iface = _local_host(iface) if iface is not None else None
     checked_hosts = list(dict.fromkeys(_local_host(host) for host in hosts))
     checked_ports = list(dict.fromkeys(ports))
     if any(isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65_535 for port in checked_ports):
@@ -150,13 +151,12 @@ def scan(hosts: Sequence[str], ports: Sequence[int], timeout: float, workers: in
     results: list[tuple[int, PortResult]] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         pending = {}
-        def submit() -> bool:
+        def submit() -> None:
             try:
                 index, (host, port) = next(jobs)
             except StopIteration:
-                return False
-            pending[pool.submit(_probe, host, port, timeout)] = index
-            return True
+                return
+            pending[pool.submit(_probe, host, port, timeout, iface)] = index
         for _ in range(min(total, workers * 2)):
             submit()
         while pending:

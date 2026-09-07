@@ -51,16 +51,14 @@ def build_payload(
     grouped: defaultdict[str, list[PortResult]] = defaultdict(list)
     for result in ports:
         grouped[result.host].append(result)
-    host_data = []
-    for host in hosts:
-        host_data.append({
-            "ip": host.ip, "mac": host.mac, "resolve_ms": host.resolve_ms,
-            "ports": [
-                {"port": item.port, "proto": "tcp", "state": item.state, "latency_ms": item.latency_ms, "error": None}
-                for item in grouped[host.ip]
-            ],
-            "probe_summary": summaries.get(host.ip, {"total": 0, **dict.fromkeys(STATES, 0)}),
-        })
+    host_data = [{
+        "ip": host.ip, "mac": host.mac, "resolve_ms": host.resolve_ms,
+        "ports": [
+            {"port": item.port, "proto": "tcp", "state": item.state, "latency_ms": item.latency_ms, "error": None}
+            for item in grouped[host.ip]
+        ],
+        "probe_summary": summaries.get(host.ip, {"total": 0, **dict.fromkeys(STATES, 0)}),
+    } for host in hosts]
     payload = {
         "schema_version": "2.0", "tool": "Arpticuno", "version": __version__, "scan_id": str(uuid4()),
         "command": "scan", "started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(),

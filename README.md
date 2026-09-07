@@ -39,7 +39,7 @@ Arpticuno:
 3. Checks selected TCP ports with normal socket connections.
 4. Produces table, JSON, or CSV output.
 
-Windows may satisfy a resolution from its local ARP table; otherwise `SendARP` sends an ARP request. `--iface` accepts a local source IPv4 address to select the interface. `--retries` retries only unsuccessful resolutions.
+Windows may satisfy a resolution from its local ARP table; otherwise `SendARP` sends an ARP request. `--iface` uses the supplied local IPv4 address as the source for both ARP resolution and TCP connections. TCP sockets bind that source address; Windows routing still selects the outbound route. `--retries` retries only unsuccessful resolutions.
 
 The default TCP selection is ports `1-7000`. With `--fail-on-inconclusive`, the command returns exit code `3` when every TCP probe fails.
 
@@ -124,6 +124,8 @@ Arpticuno is restricted to Windows, RFC1918 private or IPv4 link-local targets, 
 | Concurrent TCP workers | 512 |
 | TCP connect timeout | 10 seconds |
 | Total TCP probes | 1,000,000 |
+
+TCP timeout, worker count, ports, and source-address syntax are checked before discovery. The TCP probe budget depends on the resolved host count and is checked after discovery, before TCP connections. With the default 7,000 ports, that budget permits at most 142 resolved hosts per scan.
 
 The `SendARP` call limit is calculated as `target addresses × (retries + 1)`. Successful resolutions stop retrying.
 
