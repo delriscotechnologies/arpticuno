@@ -2,32 +2,26 @@
   <img src="assets/arpticuno-logo.jpg" alt="Arpticuno" width="420">
 </p>
 
-<p align="center">
-  Focused IPv4 LAN discovery and TCP connect scanning for authorized environments.
-</p>
-
----
-
 Arpticuno is a small Windows Python CLI for resolving IPv4 neighbors on RFC1918 private or link-local networks and reporting selected TCP connectivity results.
 
 > Use Arpticuno only on systems and networks you own or have explicit permission to test.
 
 ## Install
 
-You need Windows and Python 3.10 or newer.
+Requires Git, Windows and Python 3.10+. There are no third-party runtime dependencies; installation may download setuptools to build the package.
 
 ```powershell
 git clone https://github.com/delriscotechnologies/arpticuno.git
 cd arpticuno
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install .
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\arpticuno.exe --help
 ```
 
-Run an authorized scan:
+These commands run from the repository root without activating the environment. Replace `192.168.1.0/24` with your authorized local subnet:
 
 ```powershell
-arpticuno scan 192.168.1.0/24 --ports 22,80,443
+.\.venv\Scripts\arpticuno.exe scan 192.168.1.0/24 --ports 22,80,443
 ```
 
 ## What it does
@@ -43,70 +37,21 @@ Windows may satisfy a resolution from its local ARP table; otherwise `SendARP` s
 
 The default TCP selection is ports `1-7000`. With `--fail-on-inconclusive`, the command returns exit code `3` when every TCP probe fails.
 
-## Output
+Output defaults to a table. Use `--format json` or `--format csv` and optionally `--output report.json` or `--output report.csv`; the output parent directory must exist. Existing regular output files are replaced. JSON reports use `schema_version: 2.0`.
 
-Supported formats:
-
-- `table`
-- `json`
-- `csv`
-
-JSON reports use `schema_version: 2.0`.
-
-## Demo
+## Offline preview
 
 The synthetic preview sends no network traffic:
 
 ```powershell
-python -m arpticuno.sandbox
+.\.venv\Scripts\python.exe -m arpticuno.sandbox --no-banner
 ```
 
-Example table output:
+Its synthetic summary is:
 
 ```text
-      db                           mm     db
-     ;MM:                          MM
-    ,V^MM.    `7Mb,od8 `7MMpdMAo.mmMMmm `7MM  ,p6"bo `7MM  `7MM  `7MMpMMMb.  ,pW"Wq.
-   ,M  `MM      MM' "'   MM   `Wb  MM     MM 6M'  OO   MM    MM    MM    MM 6W'   `Wb
-   AbmmmqMA     MM       MM    M8  MM     MM 8M        MM    MM    MM    MM 8M     M8
-  A'     VML    MM       MM   ,AP  MM     MM YM.    ,  MM    MM    MM    MM YA.   ,A9
-.AMA.   .AMMA..JMML.     MMbmmd'   `Mbmo.JMML.YMbmd'   `Mbod"YML..JMML  JMML.`Ybmd9'
-                         MM
-                       .JMML.
-
-                             +--------------------------+
-                             |  Del Risco Technologies  |
-                             +--------------------------+
-
 Results: Target(s): 192.168.1.0/24 | Resolved hosts: 3 | TCP probes: 21000 | Open TCP ports: 5
 Status: completed
-
-Resolved hosts:
-  Host 1
-    IPv4: 192.168.1.1
-    MAC: aa:bb:cc:dd:ee:01
-    Resolve time: 1.2 ms
-    TCP Probes: 7000
-    Open TCP Ports: 2
-      Port: 53/tcp | State: open | Latency: 0.8 ms
-      Port: 80/tcp | State: open | Latency: 0.9 ms
-
-  Host 2
-    IPv4: 192.168.1.10
-    MAC: aa:bb:cc:dd:ee:10
-    Resolve time: 2.7 ms
-    TCP Probes: 7000
-    Open TCP Ports: 2
-      Port: 22/tcp | State: open | Latency: 1.4 ms
-      Port: 443/tcp | State: open | Latency: 1.8 ms
-
-  Host 3
-    IPv4: 192.168.1.25
-    MAC: aa:bb:cc:dd:ee:25
-    Resolve time: 3.4 ms
-    TCP Probes: 7000
-    Open TCP Ports: 1
-      Port: 3389/tcp | State: open | Latency: 2.1 ms
 ```
 
 ## Scope and limits
@@ -130,6 +75,8 @@ TCP timeout, worker count, ports, and source-address syntax are checked before d
 The `SendARP` call limit is calculated as `target addresses × (retries + 1)`. Successful resolutions stop retrying.
 
 Resolve time measures the duration of the Windows resolution call and may represent a cached ARP-table lookup rather than network round-trip time.
+
+Exit codes: `0` for a completed command (including no resolved hosts or no open ports), `1` for an operational error, `2` for invalid arguments, and `3` for wholly inconclusive TCP probes when `--fail-on-inconclusive` is selected. Closed ports are conclusive TCP results.
 
 See [SECURITY.md](SECURITY.md) for security notes.
 
