@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arpticuno"
+dynamic = ["version"]
+description = "Windows IPv4 LAN discovery and TCP connect scanning."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+arpticuno = "arpticuno.cli:main"
+
+[tool.setuptools]
+packages = ["arpticuno"]
+
+[tool.setuptools.dynamic]
+version = {attr = "arpticuno.__version__"}
